@@ -4,3 +4,6 @@ dist/
 .env.*
 
 
+
+# TypeScript build artifacts
+tsconfig.tsbuildinfo
