@@ -4,7 +4,7 @@ import { Pin, PinOff, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { Button } from "../../components/Button";
 
-export type PanelType = "inbox" | "activity" | "saved";
+export type PanelType = "inbox" | "onlyme" | "raw";
 
 export function ContextPanel({
   panel,
@@ -49,7 +49,7 @@ export function ContextPanel({
 
   return (
     <section
-      className="relative shrink-0 border-r border-slate-200 bg-white"
+      className="relative shrink-0 border-r border-slate-200 bg-white h-full flex flex-col"
       style={{ width }}
       aria-label="Context panel"
     >
@@ -58,11 +58,11 @@ export function ContextPanel({
           <TabButton active={panel === "inbox"} onClick={() => onSelectPanel("inbox")}>
             Inbox
           </TabButton>
-          <TabButton active={panel === "activity"} onClick={() => onSelectPanel("activity")} disabled>
-            Activity
+          <TabButton active={panel === "onlyme"} onClick={() => onSelectPanel("onlyme")}>
+            OnlyMe
           </TabButton>
-          <TabButton active={panel === "saved"} onClick={() => onSelectPanel("saved")} disabled>
-            Saved
+          <TabButton active={panel === "raw"} onClick={() => onSelectPanel("raw")}>
+            Raw Mode
           </TabButton>
         </div>
 
@@ -82,7 +82,7 @@ export function ContextPanel({
         </div>
       </div>
 
-      <div className="h-[calc(100vh-3.5rem)] overflow-auto">{children}</div>
+      <div className="flex-1 overflow-auto">{children}</div>
 
       {/* resize handle */}
       <div

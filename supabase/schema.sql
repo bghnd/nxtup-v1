@@ -119,6 +119,81 @@ create index if not exists tasks_assignee_id_idx on public.tasks(assignee_id);
 create index if not exists tasks_status_idx on public.tasks(status);
 create index if not exists tasks_due_date_idx on public.tasks(due_date);
 
+-- =========================
+-- Task Groups / Lists / Placements (multi-placement foundation)
+-- =========================
+do $$ begin
+  create type public.task_list_type as enum ('inbox', 'person', 'project', 'time_slot', 'calendar_event', 'other');
+exception
+  when duplicate_object then null;
+end $$;
+
+create table if not exists public.task_groups (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  title text not null,
+  description text,
+  sort_order integer not null default 0,
+  created_by uuid not null references public.profiles(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists task_groups_workspace_id_idx on public.task_groups(workspace_id);
+
+create table if not exists public.task_lists (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  -- null for non-board lists like Inbox (shown in the L2 context panel)
+  group_id uuid references public.task_groups(id) on delete cascade,
+  type public.task_list_type not null,
+  ref_id text,
+  title text not null,
+  sort_order integer not null default 0,
+  created_by uuid not null references public.profiles(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists task_lists_workspace_id_idx on public.task_lists(workspace_id);
+create index if not exists task_lists_group_id_idx on public.task_lists(group_id);
+
+create table if not exists public.task_placements (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  task_id uuid not null references public.tasks(id) on delete cascade,
+  list_id uuid not null references public.task_lists(id) on delete cascade,
+  position bigint not null default 0,
+  created_by uuid not null references public.profiles(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  unique (task_id, list_id)
+);
+
+create index if not exists task_placements_workspace_id_idx on public.task_placements(workspace_id);
+create index if not exists task_placements_list_id_position_idx on public.task_placements(list_id, position);
+create index if not exists task_placements_task_id_idx on public.task_placements(task_id);
+
+-- =========================
+-- Task participants (watchers / trackers)
+-- =========================
+do $$ begin
+  create type public.task_participant_role as enum ('watcher', 'tracker');
+exception
+  when duplicate_object then null;
+end $$;
+
+create table if not exists public.task_participants (
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  task_id uuid not null references public.tasks(id) on delete cascade,
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  role public.task_participant_role not null default 'watcher',
+  created_by uuid not null references public.profiles(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  primary key (task_id, profile_id)
+);
+
+create index if not exists task_participants_workspace_id_idx on public.task_participants(workspace_id);
+create index if not exists task_participants_task_id_idx on public.task_participants(task_id);
+create index if not exists task_participants_profile_id_idx on public.task_participants(profile_id);
+
 -- Task <-> tags
 create table if not exists public.task_tags (
   task_id uuid not null references public.tasks(id) on delete cascade,
@@ -152,8 +227,141 @@ create index if not exists task_comments_task_id_idx on public.task_comments(tas
 -- =========================
 -- RLS (Phase 2 when real auth is enabled)
 -- =========================
--- enable row level security on all tables
--- and add policies based on workspace_members for authenticated user.
+-- NOTE: These are baseline policies suitable for early MVP testing.
+-- Tighten later for roles, shared views, and invite flows.
+
+create or replace function public.is_workspace_member(wid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists(
+    select 1
+    from public.workspace_members m
+    where m.workspace_id = wid
+      and m.profile_id = auth.uid()
+      and m.status = 'active'
+  );
+$$;
+
+-- Allow authenticated users to call the helper.
+grant execute on function public.is_workspace_member(uuid) to authenticated;
+
+alter table public.workspaces enable row level security;
+alter table public.workspace_members enable row level security;
+alter table public.invites enable row level security;
+alter table public.tasks enable row level security;
+alter table public.task_groups enable row level security;
+alter table public.task_lists enable row level security;
+alter table public.task_placements enable row level security;
+alter table public.task_participants enable row level security;
+
+-- Workspaces: members can read; any authenticated user can create a workspace.
+drop policy if exists "workspaces_select_member" on public.workspaces;
+create policy "workspaces_select_member"
+on public.workspaces
+for select
+to authenticated
+using (public.is_workspace_member(id));
+
+-- Allow the workspace creator to read their own workspace.
+-- This avoids a circular dependency when inserting the creator’s first workspace_members row.
+drop policy if exists "workspaces_select_creator" on public.workspaces;
+create policy "workspaces_select_creator"
+on public.workspaces
+for select
+to authenticated
+using (created_by = auth.uid());
+
+drop policy if exists "workspaces_insert_authenticated" on public.workspaces;
+create policy "workspaces_insert_authenticated"
+on public.workspaces
+for insert
+to authenticated
+with check (created_by = auth.uid());
+
+drop policy if exists "workspaces_update_creator" on public.workspaces;
+create policy "workspaces_update_creator"
+on public.workspaces
+for update
+to authenticated
+using (created_by = auth.uid())
+with check (created_by = auth.uid());
+
+drop policy if exists "workspaces_delete_creator" on public.workspaces;
+create policy "workspaces_delete_creator"
+on public.workspaces
+for delete
+to authenticated
+using (created_by = auth.uid());
+
+-- Members: members can read membership; only the workspace creator can manage membership (MVP baseline).
+drop policy if exists "workspace_members_select_member" on public.workspace_members;
+create policy "workspace_members_select_member"
+on public.workspace_members
+for select
+to authenticated
+using (public.is_workspace_member(workspace_id));
+
+drop policy if exists "workspace_members_manage_owner" on public.workspace_members;
+create policy "workspace_members_manage_owner"
+on public.workspace_members
+for all
+to authenticated
+using (auth.uid() = (select w.created_by from public.workspaces w where w.id = workspace_id))
+with check (auth.uid() = (select w.created_by from public.workspaces w where w.id = workspace_id));
+
+-- Invites: only workspace creator can manage invites (MVP baseline).
+drop policy if exists "invites_manage_owner" on public.invites;
+create policy "invites_manage_owner"
+on public.invites
+for all
+to authenticated
+using (auth.uid() = (select w.created_by from public.workspaces w where w.id = workspace_id))
+with check (auth.uid() = (select w.created_by from public.workspaces w where w.id = workspace_id));
+
+-- Tasks + placements: any active member of the workspace can CRUD (MVP baseline).
+drop policy if exists "tasks_crud_member" on public.tasks;
+create policy "tasks_crud_member"
+on public.tasks
+for all
+to authenticated
+using (public.is_workspace_member(workspace_id))
+with check (public.is_workspace_member(workspace_id));
+
+drop policy if exists "task_groups_crud_member" on public.task_groups;
+create policy "task_groups_crud_member"
+on public.task_groups
+for all
+to authenticated
+using (public.is_workspace_member(workspace_id))
+with check (public.is_workspace_member(workspace_id));
+
+drop policy if exists "task_lists_crud_member" on public.task_lists;
+create policy "task_lists_crud_member"
+on public.task_lists
+for all
+to authenticated
+using (public.is_workspace_member(workspace_id))
+with check (public.is_workspace_member(workspace_id));
+
+drop policy if exists "task_placements_crud_member" on public.task_placements;
+create policy "task_placements_crud_member"
+on public.task_placements
+for all
+to authenticated
+using (public.is_workspace_member(workspace_id))
+with check (public.is_workspace_member(workspace_id));
+
+drop policy if exists "task_participants_crud_member" on public.task_participants;
+create policy "task_participants_crud_member"
+on public.task_participants
+for all
+to authenticated
+using (public.is_workspace_member(workspace_id))
+with check (public.is_workspace_member(workspace_id));
 
 
 

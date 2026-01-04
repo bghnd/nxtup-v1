@@ -7,6 +7,7 @@ import { MembersSettingsPage } from "../ui/pages/MembersSettingsPage";
 import { GeneralSettingsPage } from "../ui/pages/GeneralSettingsPage";
 import { DashboardPage } from "../ui/pages/DashboardPage";
 import { RouteErrorPage } from "../ui/pages/RouteErrorPage";
+import { AuthLandingPage } from "../ui/pages/AuthLandingPage";
 
 export const router = createBrowserRouter([
   {
@@ -14,7 +15,8 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     errorElement: <RouteErrorPage />,
     children: [
-      { index: true, element: <Navigate to="/w/demo/board" replace /> },
+      { index: true, element: <AuthLandingPage /> },
+      { path: "auth/callback", element: <AuthLandingPage /> },
       { path: "w/:workspaceId/board", element: <BoardPage /> },
       { path: "w/:workspaceId/dashboard", element: <DashboardPage /> },
       { path: "w/:workspaceId/settings/members", element: <MembersSettingsPage /> },

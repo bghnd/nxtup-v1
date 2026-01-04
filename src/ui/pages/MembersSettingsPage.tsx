@@ -8,7 +8,7 @@ import {
   listInvites,
   listWorkspaceMembers,
   setMemberRole
-} from "../../data/api";
+} from "../../data/client";
 import { Card } from "../components/Card";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";

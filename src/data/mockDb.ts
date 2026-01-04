@@ -1,4 +1,14 @@
-import type { Invite, Profile, Task, Workspace, WorkspaceMember } from "../domain/types";
+import type {
+  Invite,
+  Profile,
+  Task,
+  TaskGroup,
+  TaskList,
+  TaskPlacement,
+  TaskParticipant,
+  Workspace,
+  WorkspaceMember
+} from "../domain/types";
 
 export const demoWorkspace: Workspace = {
   id: "demo",
@@ -48,6 +58,86 @@ export const demoInvites: Invite[] = [
     createdAt: now
   }
 ];
+
+export const demoTaskGroups: TaskGroup[] = [
+  {
+    id: "g_core_team",
+    workspaceId: "demo",
+    title: "My Core Team",
+    description: "People lists for day-to-day delivery and accountability.",
+    sortOrder: 100
+  },
+  {
+    id: "g_planning",
+    workspaceId: "demo",
+    title: "Planning",
+    description: "Project + time-slot lists (MVP mock types).",
+    sortOrder: 200
+  }
+];
+
+export const demoTaskLists: TaskList[] = [
+  // Inbox (L2 panel)
+  {
+    id: "l_inbox",
+    workspaceId: "demo",
+    groupId: null,
+    type: "inbox",
+    title: "Inbox",
+    sortOrder: 0
+  },
+  // Core team people lists
+  {
+    id: "l_person_alice",
+    workspaceId: "demo",
+    groupId: "g_core_team",
+    type: "person",
+    refId: "p_alice",
+    title: "Alice",
+    sortOrder: 100
+  },
+  {
+    id: "l_person_bob",
+    workspaceId: "demo",
+    groupId: "g_core_team",
+    type: "person",
+    refId: "p_bob",
+    title: "Bob",
+    sortOrder: 200
+  },
+  {
+    id: "l_person_charlie",
+    workspaceId: "demo",
+    groupId: "g_core_team",
+    type: "person",
+    refId: "p_charlie",
+    title: "Charlie",
+    sortOrder: 300
+  },
+  // MVP mock list types
+  {
+    id: "l_project_demo",
+    workspaceId: "demo",
+    groupId: "g_planning",
+    type: "project",
+    refId: "proj_nxtup_launch",
+    title: "Project: NXTUP Launch",
+    sortOrder: 100
+  },
+  {
+    id: "l_time_first_thing_tomorrow",
+    workspaceId: "demo",
+    groupId: "g_planning",
+    type: "time_slot",
+    refId: "timeslot_first_thing_tomorrow",
+    title: "Time Slot: First Thing Tomorrow",
+    sortOrder: 200
+  }
+];
+
+export const demoTaskPlacements: TaskPlacement[] = [];
+
+export const demoTaskParticipants: TaskParticipant[] = [];
 
 export const demoTasks: Task[] = [
   {
@@ -233,5 +323,62 @@ export const demoTasks: Task[] = [
     tags: ["bug"]
   }
 ];
+
+// Seed placements derived from the legacy task fields so existing UI still works while
+// we migrate Board rendering to placements.
+function seedPlacementsFromTasks(): TaskPlacement[] {
+  const placements: TaskPlacement[] = [];
+  let i = 0;
+  for (const t of demoTasks) {
+    i += 1;
+    if (t.location === "inbox") {
+      placements.push({
+        id: `pl_${t.id}_inbox`,
+        workspaceId: t.workspaceId,
+        taskId: t.id,
+        listId: "l_inbox",
+        position: i * 100,
+        createdBy: t.createdBy,
+        createdAt: now
+      });
+      continue;
+    }
+
+    // Board tasks: place into the assignee's person list (MVP behavior).
+    const listId =
+      t.assigneeId === "p_alice"
+        ? "l_person_alice"
+        : t.assigneeId === "p_bob"
+          ? "l_person_bob"
+          : t.assigneeId === "p_charlie"
+            ? "l_person_charlie"
+            : "l_person_alice";
+    placements.push({
+      id: `pl_${t.id}_${listId}`,
+      workspaceId: t.workspaceId,
+      taskId: t.id,
+      listId,
+      position: i * 100,
+      createdBy: t.createdBy,
+      createdAt: now
+    });
+
+    // Demonstrate multi-placement in MVP: put one task into a project list too.
+    if (t.id === "t_roadmap") {
+      placements.push({
+        id: `pl_${t.id}_project`,
+        workspaceId: t.workspaceId,
+        taskId: t.id,
+        listId: "l_project_demo",
+        position: (i + 1) * 100,
+        createdBy: t.createdBy,
+        createdAt: now
+      });
+    }
+  }
+  return placements;
+}
+
+demoTaskPlacements.push(...seedPlacementsFromTasks());
 
 

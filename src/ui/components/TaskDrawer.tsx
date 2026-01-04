@@ -1,5 +1,5 @@
 import React from "react";
-import type { Priority, Profile, Task, TaskLocation } from "../../domain/types";
+import type { Priority, Profile, Task, TaskLocation, TaskParticipant } from "../../domain/types";
 import { cn } from "../lib/cn";
 import { Button } from "./Button";
 import { Input } from "./Input";
@@ -12,14 +12,17 @@ export function TaskDrawer({
   mode,
   task,
   profiles,
+  participants,
   onClose,
   onSave,
-  onDelete
+  onDelete,
+  onAddMember
 }: {
   open: boolean;
   mode: TaskDrawerMode;
   task?: Task | null;
   profiles: Profile[];
+  participants?: TaskParticipant[];
   onClose: () => void;
   onSave: (values: {
     title: string;
@@ -27,8 +30,10 @@ export function TaskDrawer({
     dueDate?: string | null;
     location: TaskLocation;
     assigneeId: string | null;
+    watcherIds: string[];
   }) => void;
   onDelete?: () => void;
+  onAddMember?: (input: { name: string; email?: string | null; sendInvite?: boolean }) => Promise<Profile>;
 }) {
   React.useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -44,6 +49,21 @@ export function TaskDrawer({
   const [dueDate, setDueDate] = React.useState<string>("");
   const [location, setLocation] = React.useState<TaskLocation>("inbox");
   const [assigneeId, setAssigneeId] = React.useState<string>(""); // empty == unassigned
+  const [addMemberOpen, setAddMemberOpen] = React.useState(false);
+  const [newMemberName, setNewMemberName] = React.useState("");
+  const [newMemberEmail, setNewMemberEmail] = React.useState("");
+  const [newMemberSendInvite, setNewMemberSendInvite] = React.useState(false);
+  const [addingMember, setAddingMember] = React.useState(false);
+  const [watcherPick, setWatcherPick] = React.useState("");
+  const [watcherIds, setWatcherIds] = React.useState<string[]>([]);
+  const initialRef = React.useRef<{
+    title: string;
+    priority: Priority;
+    dueDate: string;
+    location: TaskLocation;
+    assigneeId: string;
+    watcherIds: string[];
+  } | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
@@ -53,6 +73,20 @@ export function TaskDrawer({
       setDueDate(task.dueDate ?? "");
       setLocation(task.location);
       setAssigneeId(task.assigneeId ?? "");
+      const ids =
+        (participants ?? [])
+          .filter((p) => p.role === "watcher")
+          .map((p) => p.profileId)
+          .filter(Boolean) ?? [];
+      setWatcherIds(ids);
+      initialRef.current = {
+        title: task.title,
+        priority: task.priority,
+        dueDate: task.dueDate ?? "",
+        location: task.location,
+        assigneeId: task.assigneeId ?? "",
+        watcherIds: ids.slice().sort()
+      };
       return;
     }
 
@@ -62,7 +96,58 @@ export function TaskDrawer({
     setDueDate("");
     setLocation("inbox");
     setAssigneeId("");
+    setAddMemberOpen(false);
+    setNewMemberName("");
+    setNewMemberEmail("");
+    setNewMemberSendInvite(false);
+    setAddingMember(false);
+    setWatcherPick("");
+    setWatcherIds([]);
+    initialRef.current = {
+      title: "",
+      priority: "medium",
+      dueDate: "",
+      location: "inbox",
+      assigneeId: "",
+      watcherIds: []
+    };
   }, [open, mode, task, profiles]);
+
+  const watcherIdSet = new Set(watcherIds);
+  const watchers = watcherIds
+    .map((id) => profiles.find((p) => p.id === id))
+    .filter(Boolean) as Profile[];
+
+  const isDirty = React.useMemo(() => {
+    const initial = initialRef.current;
+    if (!initial) return false;
+    const now = {
+      title: title.trim(),
+      priority,
+      dueDate: dueDate.trim(),
+      location,
+      assigneeId: assigneeId.trim(),
+      watcherIds: watcherIds.slice().sort()
+    };
+    const baseline = {
+      title: initial.title.trim(),
+      priority: initial.priority,
+      dueDate: initial.dueDate.trim(),
+      location: initial.location,
+      assigneeId: initial.assigneeId.trim(),
+      watcherIds: initial.watcherIds.slice().sort()
+    };
+    if (now.title !== baseline.title) return true;
+    if (now.priority !== baseline.priority) return true;
+    if (now.dueDate !== baseline.dueDate) return true;
+    if (now.location !== baseline.location) return true;
+    if (now.assigneeId !== baseline.assigneeId) return true;
+    if (now.watcherIds.length !== baseline.watcherIds.length) return true;
+    for (let i = 0; i < now.watcherIds.length; i += 1) {
+      if (now.watcherIds[i] !== baseline.watcherIds[i]) return true;
+    }
+    return false;
+  }, [assigneeId, dueDate, location, priority, title, watcherIds]);
 
   if (!open) return null;
 
@@ -134,7 +219,14 @@ export function TaskDrawer({
               <Field label="Assignee">
                 <Select
                   value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "__add__") {
+                      setAddMemberOpen(true);
+                      return;
+                    }
+                    setAssigneeId(v);
+                  }}
                   disabled={location === "inbox" ? false : false}
                 >
                   <option value="">Unassigned</option>
@@ -143,37 +235,169 @@ export function TaskDrawer({
                       {p.name}
                     </option>
                   ))}
+                  <option value="__add__">Add…</option>
                 </Select>
+
+                {addMemberOpen ? (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-medium text-slate-700">Add team member</div>
+                    <div className="mt-2 space-y-2">
+                      <Input
+                        placeholder="Name (e.g. Maggie)"
+                        value={newMemberName}
+                        onChange={(e) => setNewMemberName(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Email (optional)"
+                        value={newMemberEmail}
+                        onChange={(e) => setNewMemberEmail(e.target.value)}
+                      />
+                      <label className="flex items-center gap-2 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={newMemberSendInvite}
+                          onChange={(e) => setNewMemberSendInvite(e.target.checked)}
+                        />
+                        Send invite now (requires email)
+                      </label>
+                    </div>
+                    <div className="mt-3 flex items-center justify-end gap-2">
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setAddMemberOpen(false);
+                          setNewMemberName("");
+                          setNewMemberEmail("");
+                          setNewMemberSendInvite(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        disabled={
+                          addingMember ||
+                          !newMemberName.trim().length ||
+                          (newMemberSendInvite && newMemberEmail.trim().length < 5) ||
+                          !onAddMember
+                        }
+                        onClick={async () => {
+                          if (!onAddMember) return;
+                          try {
+                            setAddingMember(true);
+                            const profile = await onAddMember({
+                              name: newMemberName.trim(),
+                              email: newMemberEmail.trim().length ? newMemberEmail.trim() : null,
+                              sendInvite: newMemberSendInvite
+                            });
+                            setAssigneeId(profile.id);
+                            setAddMemberOpen(false);
+                            setNewMemberName("");
+                            setNewMemberEmail("");
+                            setNewMemberSendInvite(false);
+                          } catch (err) {
+                            // eslint-disable-next-line no-console
+                            console.error("[TaskDrawer] add member failed", err);
+                          } finally {
+                            setAddingMember(false);
+                          }
+                        }}
+                      >
+                        Create
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </Field>
+
+              {mode === "edit" && task ? (
+                <Field label="Watchers">
+                  <div className="space-y-2">
+                    {watchers.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {watchers.map((p) => (
+                          <span
+                            key={p.id}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
+                          >
+                            {p.name}
+                            <button
+                              className="text-slate-400 hover:text-slate-700"
+                              aria-label={`Remove ${p.name} from watchers`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setWatcherIds((prev) => prev.filter((id) => id !== p.id));
+                              }}
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500">No watchers yet.</div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={watcherPick}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          setWatcherPick(id);
+                          if (!id || id === "__none__") return;
+                          if (watcherIdSet.has(id)) return;
+                          setWatcherIds((prev) => [...prev, id]);
+                          setWatcherPick("");
+                        }}
+                      >
+                        <option value="">Add watcher…</option>
+                        {profiles
+                          .filter((p) => p.id !== (task.assigneeId ?? "") && !watcherIdSet.has(p.id))
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                      </Select>
+                      <span className="text-xs text-slate-500">Use (Name) in Quick Entry too.</span>
+                    </div>
+                  </div>
+                </Field>
+              ) : null}
             </div>
           </div>
 
           <div className="border-t border-slate-200 p-5">
             <div className="flex items-center justify-between gap-3">
-              <div>
+              <div className="flex items-center gap-3">
                 {mode === "edit" && onDelete ? (
                   <Button variant="ghost" className="text-rose-700 hover:bg-rose-50" onClick={onDelete}>
-                    Delete
+                    Delete Task
                   </Button>
                 ) : (
                   <span className="text-xs text-slate-500">
                     Tip: press <kbd className="rounded border px-1">Esc</kbd> to close
                   </span>
                 )}
+                {isDirty ? (
+                  <span className="text-xs font-medium text-amber-700">Unsaved changes</span>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="secondary" onClick={onClose}>
                   Cancel
                 </Button>
                 <Button
-                  disabled={!canSave}
+                  disabled={!canSave || !isDirty}
                   onClick={() =>
                     onSave({
                       title: title.trim(),
                       priority,
                       dueDate: dueDate.length ? dueDate : null,
                       location,
-                      assigneeId: assigneeId.length ? assigneeId : null
+                      assigneeId: assigneeId.length ? assigneeId : null,
+                      watcherIds
                     })
                   }
                 >
@@ -196,10 +420,10 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
+    <div className="block">
       <div className="mb-1 text-xs font-medium text-slate-600">{label}</div>
       <div className={cn("w-full")}>{children}</div>
-    </label>
+    </div>
   );
 }
 
