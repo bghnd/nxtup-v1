@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, Eye, Filter, MoreHorizontal, Plus, Tag, Users } from "lucide-react";
+import { Calendar, ChevronDown, ChevronRight, Eye, Filter, MoreHorizontal, Plus, Tag, Users } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
@@ -10,7 +10,6 @@ import {
   createInvite,
   createTask,
   createTaskPlacement,
-  createWorkspace,
   deleteTask,
   deleteTaskGroup,
   deleteTaskList,
@@ -18,7 +17,6 @@ import {
   deleteWorkspace,
   getWorkspace,
   listProfiles,
-  listWorkspaces,
   listTaskGroups,
   listTaskLists,
   listTaskPlacements,
@@ -42,12 +40,15 @@ import { Select } from "../components/Select";
 import { cn } from "../lib/cn";
 import { TaskDrawer } from "../components/TaskDrawer";
 import { Modal } from "../components/Modal";
+import { InlineEditableText } from "../components/InlineEditableText";
 import { useQueryClient } from "@tanstack/react-query";
 import { DISPLAY_KEY, loadDisplayPrefs, type DisplayPrefs } from "../state/displayPrefs";
 import { useStubSession } from "../../auth/stubAuth";
 
 const DND_MIME = "application/x-nxtup-task";
 type DragPayload = { taskId: string; fromListId?: string | null };
+const LAST_UNGROUPED_KEY_PREFIX = "nxtup.lastUngroupedListId.v1.";
+const GROUP_COLLAPSE_KEY_PREFIX = "nxtup.groupCollapsedById.v1.";
 
 function formatDueDate(date?: string) {
   if (!date) return null;
@@ -56,6 +57,98 @@ function formatDueDate(date?: string) {
 
 function priorityVariant(p: Task["priority"]): "low" | "medium" | "high" | "critical" {
   return p;
+}
+
+function ScrollDots({
+  scrollerRef,
+  dotCount
+}: {
+  scrollerRef: React.RefObject<HTMLDivElement | null>;
+  dotCount: number;
+}) {
+  const [activeDot, setActiveDot] = React.useState(0);
+  const [show, setShow] = React.useState(false);
+
+  React.useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const node: HTMLDivElement = el;
+
+    function recalc() {
+      // Only show dots when the row is actually horizontally scrollable.
+      setShow(node.scrollWidth - node.clientWidth > 4);
+    }
+
+    function onScroll() {
+      if (dotCount <= 1) {
+        setActiveDot(0);
+        return;
+      }
+
+      const first = node.firstElementChild as HTMLElement | null;
+      const childW = first?.clientWidth ?? 0;
+      const styles = getComputedStyle(node);
+      const gapRaw = styles.columnGap || styles.gap || "0px";
+      const gap = Number.parseFloat(gapRaw) || 0;
+      const step = Math.max(1, childW + gap);
+      const idx = Math.round(node.scrollLeft / step);
+      setActiveDot(Math.max(0, Math.min(dotCount - 1, idx)));
+    }
+
+    recalc();
+    onScroll();
+
+    node.addEventListener("scroll", onScroll, { passive: true });
+    const RO = typeof ResizeObserver !== "undefined" ? ResizeObserver : null;
+    const ro = RO ? new RO(() => {
+      recalc();
+      onScroll();
+    }) : null;
+    ro?.observe(node);
+
+    return () => {
+      node.removeEventListener("scroll", onScroll);
+      ro?.disconnect();
+    };
+  }, [scrollerRef, dotCount]);
+
+  if (!show || dotCount <= 1) return null;
+
+  return (
+    <div className="mt-2 flex justify-center">
+      <div className="inline-flex items-center gap-2">
+        {Array.from({ length: dotCount }).map((_, i) => (
+          <span
+            key={i}
+            className={cn(
+              "h-1.5 w-1.5 rounded-full bg-slate-300 transition-colors",
+              i === activeDot && "bg-slate-600"
+            )}
+            aria-hidden
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HorizontalScrollRow({ children, dotCount }: { children: React.ReactNode; dotCount: number }) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  return (
+    <div>
+      <div
+        ref={ref}
+        className={cn(
+          "flex gap-5 overflow-x-auto pb-2",
+          // Hide native horizontal scrollbar (keep trackpad/scrollwheel scrolling).
+          "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        )}
+      >
+        {children}
+      </div>
+      <ScrollDots scrollerRef={ref} dotCount={dotCount} />
+    </div>
+  );
 }
 
 export function BoardPage() {
@@ -72,15 +165,24 @@ export function BoardPage() {
   const [display, setDisplay] = React.useState<DisplayPrefs>(() => loadDisplayPrefs());
   const [quickAddText, setQuickAddText] = React.useState("");
   const [quickAddActiveIdx, setQuickAddActiveIdx] = React.useState(0);
+  const [addMenuOpen, setAddMenuOpen] = React.useState(false);
+  const [createTargetListId, setCreateTargetListId] = React.useState<string | null>(null);
+  const [collapsedGroupsById, setCollapsedGroupsById] = React.useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(`${GROUP_COLLAPSE_KEY_PREFIX}${workspaceId}`);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object") return parsed as Record<string, boolean>;
+    } catch {
+      // ignore
+    }
+    return {};
+  });
 
   // Workspace / group / list management modals
   const [workspaceModal, setWorkspaceModal] = React.useState<
     | null
-    | { mode: "create" }
-    | { mode: "rename"; id: string; name: string }
     | { mode: "delete"; id: string; name: string }
   >(null);
-  const [workspaceNameDraft, setWorkspaceNameDraft] = React.useState("");
 
   const [groupModal, setGroupModal] = React.useState<
     | null
@@ -117,15 +219,6 @@ export function BoardPage() {
   const [unknownMemberSendInvite, setUnknownMemberSendInvite] = React.useState(false);
 
   React.useEffect(() => {
-    if (!workspaceModal) return;
-    if (workspaceModal.mode === "create") {
-      setWorkspaceNameDraft("");
-    } else {
-      setWorkspaceNameDraft(workspaceModal.name);
-    }
-  }, [workspaceModal]);
-
-  React.useEffect(() => {
     try {
       localStorage.setItem(DISPLAY_KEY, JSON.stringify(display));
     } catch {
@@ -133,15 +226,30 @@ export function BoardPage() {
     }
   }, [display]);
 
+  // Keep collapse state scoped per workspace.
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`${GROUP_COLLAPSE_KEY_PREFIX}${workspaceId}`);
+      const parsed = raw ? JSON.parse(raw) : null;
+      setCollapsedGroupsById(parsed && typeof parsed === "object" ? (parsed as Record<string, boolean>) : {});
+    } catch {
+      setCollapsedGroupsById({});
+    }
+  }, [workspaceId]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(`${GROUP_COLLAPSE_KEY_PREFIX}${workspaceId}`, JSON.stringify(collapsedGroupsById));
+    } catch {
+      // ignore
+    }
+  }, [collapsedGroupsById, workspaceId]);
+
   const workspaceQ = useQuery({
     queryKey: ["workspace", workspaceId],
     queryFn: () => getWorkspace(workspaceId)
   });
 
-  const workspacesQ = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: () => listWorkspaces()
-  });
 
   const profilesQ = useQuery({
     queryKey: ["profiles", workspaceId],
@@ -174,7 +282,7 @@ export function BoardPage() {
   });
 
   const workspaceName = workspaceQ.data?.name ?? "Workspace";
-  const workspaces = workspacesQ.data ?? [];
+  const workspaceDescription = workspaceQ.data?.description ?? null;
   const profiles = profilesQ.data ?? [];
   const tasks = tasksQ.data ?? [];
   const groups = groupsQ.data ?? [];
@@ -189,10 +297,25 @@ export function BoardPage() {
 
   const boardTasks = tasks.filter((t) => t.location === "board");
 
-  const boardListIds = React.useMemo(() => new Set(lists.filter((l) => l.groupId).map((l) => l.id)), [lists]);
-  const boardPlacements = React.useMemo(
-    () => placements.filter((p) => boardListIds.has(p.listId)),
-    [placements, boardListIds]
+  const ungroupedLists = React.useMemo(
+    () =>
+      lists
+        .filter((l) => l.groupId == null && l.type !== "inbox")
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    [lists]
+  );
+  const groupedListIds = React.useMemo(() => new Set(lists.filter((l) => l.groupId).map((l) => l.id)), [lists]);
+  const ungroupedListIds = React.useMemo(() => new Set(ungroupedLists.map((l) => l.id)), [ungroupedLists]);
+  const canvasListIds = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const id of groupedListIds) s.add(id);
+    for (const id of ungroupedListIds) s.add(id);
+    return s;
+  }, [groupedListIds, ungroupedListIds]);
+  const canvasPlacements = React.useMemo(
+    () => placements.filter((p) => canvasListIds.has(p.listId)),
+    [placements, canvasListIds]
   );
 
   // If routed here with a task id (e.g., clicked from Inbox panel), open it.
@@ -208,6 +331,7 @@ export function BoardPage() {
   function closeTaskDrawer() {
     setDrawerOpen(false);
     setActiveTaskId(null);
+    setCreateTargetListId(null);
     if (searchParams.get("task")) {
       const next = new URLSearchParams(searchParams);
       next.delete("task");
@@ -219,18 +343,14 @@ export function BoardPage() {
   const priority = (searchParams.get("priority") ?? "").trim().toLowerCase();
   const due = (searchParams.get("due") ?? "").trim().toLowerCase(); // "overdue" | "next7"
 
-  // Only show tasks that have at least one placement in any board list.
-  const boardTaskIdSet = React.useMemo(
-    () => new Set(boardPlacements.map((p) => p.taskId)),
-    [boardPlacements]
+  // Only show tasks that have at least one placement in any canvas list (ungrouped + grouped).
+  const canvasTaskIdSet = React.useMemo(() => new Set(canvasPlacements.map((p) => p.taskId)), [canvasPlacements]);
+  const canvasPlacedTasks = React.useMemo(
+    () => boardTasks.filter((t) => canvasTaskIdSet.has(t.id)),
+    [boardTasks, canvasTaskIdSet]
   );
 
-  const boardPlacedTasks = React.useMemo(
-    () => boardTasks.filter((t) => boardTaskIdSet.has(t.id)),
-    [boardTasks, boardTaskIdSet]
-  );
-
-  const filteredTasks = boardPlacedTasks.filter((t) => {
+  const filteredTasks = canvasPlacedTasks.filter((t) => {
     if (q.length) {
       const assigneeName = profiles.find((p) => p.id === t.assigneeId)?.name ?? "";
       const haystack = `${t.title} ${assigneeName} ${t.tags.join(" ")}`.toLowerCase();
@@ -281,7 +401,7 @@ export function BoardPage() {
 
   const placementsByList = React.useMemo(() => {
     const m = new Map<string, TaskPlacement[]>();
-    for (const p of boardPlacements) {
+    for (const p of canvasPlacements) {
       const arr = m.get(p.listId) ?? [];
       arr.push(p);
       m.set(p.listId, arr);
@@ -293,7 +413,7 @@ export function BoardPage() {
       );
     }
     return m;
-  }, [boardPlacements]);
+  }, [canvasPlacements]);
 
   const personListByProfileId = React.useMemo(() => {
     const m = new Map<string, TaskList>();
@@ -307,6 +427,44 @@ export function BoardPage() {
   }, [lists]);
 
   const inboxList = React.useMemo(() => lists.find((l) => l.type === "inbox") ?? null, [lists]);
+
+  function getLastUngroupedListId(): string | null {
+    try {
+      return localStorage.getItem(`${LAST_UNGROUPED_KEY_PREFIX}${workspaceId}`);
+    } catch {
+      return null;
+    }
+  }
+
+  function setLastUngroupedListId(listId: string) {
+    try {
+      localStorage.setItem(`${LAST_UNGROUPED_KEY_PREFIX}${workspaceId}`, listId);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function createUngroupedList(): Promise<TaskList | null> {
+    const count = ungroupedLists.length;
+    if (count >= 3) return null;
+    const title = count === 0 ? "Inbox (workspace)" : `Inbox (workspace) ${count + 1}`;
+    const created = await createTaskList({
+      workspaceId,
+      groupId: null,
+      type: "other",
+      title
+    });
+    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+    return created;
+  }
+
+  async function ensureUngroupedListForCapture(): Promise<TaskList | null> {
+    const lastId = getLastUngroupedListId();
+    const last = lastId ? ungroupedLists.find((l) => l.id === lastId) ?? null : null;
+    if (last) return last;
+    if (ungroupedLists[0]) return ungroupedLists[0];
+    return await createUngroupedList();
+  }
 
   const quickEntry = React.useMemo(() => parseQuickEntry(quickAddText), [quickAddText]);
 
@@ -488,46 +646,47 @@ export function BoardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <div className="text-2xl font-semibold text-slate-900">{workspaceName}</div>
+            <InlineEditableText
+              value={workspaceName}
+              ariaLabel="Rename workspace"
+              className="text-2xl font-semibold text-slate-900"
+              inputClassName="h-9 text-2xl font-semibold"
+              onConfirm={async (next) => {
+                await updateWorkspace({ id: workspaceId as any, name: next });
+                await qc.invalidateQueries({ queryKey: ["workspaces"] });
+                await qc.invalidateQueries({ queryKey: ["workspace", workspaceId] });
+              }}
+            />
             <Button
               variant="ghost"
               size="sm"
               aria-label="Workspace menu"
               title="Workspace actions"
-              onClick={() => setWorkspaceModal({ mode: "rename", id: workspaceId, name: workspaceName })}
+              onClick={() => setWorkspaceModal({ mode: "delete", id: workspaceId, name: workspaceName })}
             >
               <MoreHorizontal size={18} />
             </Button>
           </div>
-          <div className="mt-1 text-sm text-slate-500">Team workspace / Project planning</div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Select
-              className="h-9 w-[260px]"
-              value={workspaceId}
-              onChange={(e) => {
-                const id = e.target.value;
-                nav(`/w/${id}/board`);
+          <div className="mt-1">
+            <InlineEditableText
+              value={workspaceDescription ?? ""}
+              placeholder="Add a workspace description…"
+              ariaLabel="Edit workspace description"
+              allowEmpty
+              truncate={false}
+              className="block w-full text-sm text-slate-500"
+              // Minimal inline editor: no new “box” chrome, just text-on-background.
+              inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
+              onConfirm={async (next) => {
+                await updateWorkspace({
+                  id: workspaceId as any,
+                  name: workspaceName,
+                  description: next.trim().length ? next.trim() : null
+                });
+                await qc.invalidateQueries({ queryKey: ["workspaces"] });
+                await qc.invalidateQueries({ queryKey: ["workspace", workspaceId] });
               }}
-              title="Switch workspace"
-            >
-              {workspaces.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </Select>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setWorkspaceNameDraft("");
-                setWorkspaceModal({ mode: "create" });
-              }}
-            >
-              <Plus size={16} className="text-slate-600" />
-              New workspace
-            </Button>
+            />
           </div>
         </div>
 
@@ -536,16 +695,70 @@ export function BoardPage() {
             <Users size={16} className="text-slate-600" />
             Team Members
           </Button>
-          <Button
-            onClick={() => {
-              setDrawerMode("create");
-              setActiveTaskId(null);
-              setDrawerOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            Add New Task
-          </Button>
+          <div className="relative">
+            <Button
+              onClick={() => setAddMenuOpen((v) => !v)}
+              aria-expanded={addMenuOpen}
+              aria-haspopup="menu"
+              title="Add…"
+            >
+              <Plus size={16} />
+              Add…
+            </Button>
+            {addMenuOpen ? (
+              <div
+                className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-card z-20"
+                role="menu"
+              >
+                <button
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  role="menuitem"
+                  onClick={async () => {
+                    setAddMenuOpen(false);
+                    const target = await ensureUngroupedListForCapture();
+                    setCreateTargetListId(target?.id ?? null);
+                    if (target?.id) setLastUngroupedListId(target.id);
+                    setDrawerMode("create");
+                    setActiveTaskId(null);
+                    setDrawerOpen(true);
+                  }}
+                >
+                  Add Task
+                  <div className="text-xs text-slate-500">Captures into last used ungrouped list</div>
+                </button>
+
+                <button
+                  className={cn(
+                    "w-full rounded-lg px-3 py-2 text-left text-sm",
+                    ungroupedLists.length >= 3 ? "text-slate-400 cursor-not-allowed" : "text-slate-700 hover:bg-slate-50"
+                  )}
+                  role="menuitem"
+                  disabled={ungroupedLists.length >= 3}
+                  onClick={async () => {
+                    setAddMenuOpen(false);
+                    const created = await createUngroupedList();
+                    if (created?.id) setLastUngroupedListId(created.id);
+                  }}
+                >
+                  Add List (ungrouped)
+                  <div className="text-xs text-slate-500">Up to 3 per workspace</div>
+                </button>
+
+                <button
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  role="menuitem"
+                  onClick={() => {
+                    setAddMenuOpen(false);
+                    setGroupTitleDraft("");
+                    setGroupDescDraft("");
+                    setGroupModal({ mode: "create" });
+                  }}
+                >
+                  Add Group
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -803,35 +1016,226 @@ export function BoardPage() {
       </div>
 
       <div className="mt-6 space-y-6">
-        <div className="flex items-center justify-end">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setGroupTitleDraft("");
-              setGroupDescDraft("");
-              setGroupModal({ mode: "create" });
-            }}
-          >
-            <Plus size={16} className="text-slate-600" />
-            Add group
-          </Button>
-        </div>
+        {/* Ungrouped lists (top zone) */}
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-xs font-medium text-slate-500">Ungrouped</div>
+            <div className="text-xs text-slate-400">Up to 3 lists</div>
+          </div>
+          <HorizontalScrollRow dotCount={ungroupedLists.slice(0, 3).length}>
+            {ungroupedLists.slice(0, 3).map((list) => {
+              const listPlacements = placementsByList.get(list.id) ?? [];
+              const listTasks = listPlacements
+                .map((p) => tasksById.get(p.taskId))
+                .filter((t): t is Task => t != null)
+                .filter((t) => filteredTaskIdSet.has(t.id));
+              const count = listTasks.length;
+              return (
+                <Card
+                  key={list.id}
+                  className="w-[320px] shrink-0 p-4"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
+                  }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    const raw = e.dataTransfer.getData(DND_MIME);
+                    const payload = raw ? (JSON.parse(raw) as DragPayload) : null;
+                    const taskId = payload?.taskId ?? e.dataTransfer.getData("text/plain");
+                    if (!taskId) return;
+                    const fromListId = payload?.fromListId ?? null;
+                    try {
+                      await updateTask({ id: taskId, location: "board" });
+                      await createTaskPlacement({
+                        workspaceId,
+                        taskId,
+                        listId: list.id,
+                        createdBy: session.user.id
+                      });
+                      if (!e.altKey && fromListId && fromListId !== list.id) {
+                        await deleteTaskPlacementByTaskAndList({ workspaceId, taskId, listId: fromListId });
+                      }
+                      setLastUngroupedListId(list.id);
+                      await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+                      await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+                    } catch (err) {
+                      // eslint-disable-next-line no-console
+                      console.error("[DnD] drop failed", err);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                        L
+                      </div>
+                      <div className="min-w-0">
+                        <InlineEditableText
+                          value={list.title}
+                          ariaLabel={`Rename list ${list.title}`}
+                          className="block w-full font-semibold text-slate-900"
+                          onConfirm={async (next) => {
+                            await updateTaskList({ id: list.id, title: next });
+                            await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                          }}
+                        />
+                        <InlineEditableText
+                          value={list.description ?? ""}
+                          placeholder="Add list description…"
+                          ariaLabel="Edit list description"
+                          allowEmpty
+                          truncate={false}
+                          className="mt-1 block w-full text-xs text-slate-500 whitespace-normal"
+                          inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
+                          onConfirm={async (next) => {
+                            await updateTaskList({
+                              id: list.id,
+                              description: next.trim().length ? next.trim() : null
+                            });
+                            await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
+                        {count}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label="List actions"
+                        title="Delete list"
+                        onClick={() => {
+                          setListModal({ mode: "delete", id: list.id, title: list.title });
+                        }}
+                      >
+                        <MoreHorizontal size={18} />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {listTasks.map((t) => (
+                      <TaskCard
+                        key={t.id}
+                        task={t}
+                        fromListId={list.id}
+                        onClick={() => {
+                          setDrawerMode("edit");
+                          setActiveTaskId(t.id);
+                          setDrawerOpen(true);
+                          setLastUngroupedListId(list.id);
+                        }}
+                        display={display}
+                      />
+                    ))}
+                    {count === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                        Drop tasks here or use Add → Task
+                      </div>
+                    ) : null}
+                  </div>
+                </Card>
+              );
+            })}
+            {ungroupedLists.length < 3 ? (
+              <button
+                className="w-[320px] shrink-0 rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-left hover:bg-slate-50"
+                onClick={async () => {
+                  const created = await createUngroupedList();
+                  if (created?.id) setLastUngroupedListId(created.id);
+                }}
+              >
+                <div className="text-sm font-semibold text-slate-900">+ Add list</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Creates Inbox (workspace){ungroupedLists.length ? ` ${ungroupedLists.length + 1}` : ""}
+                </div>
+              </button>
+            ) : null}
+          </HorizontalScrollRow>
+        </section>
         {groups
           .slice()
           .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((group) => {
+          .map((group, idx) => {
             const groupLists = listsByGroup.get(group.id) ?? [];
+            const isCollapsed = collapsedGroupsById[group.id] ?? false;
+            const groupVisibleTaskCount = (() => {
+              const set = new Set<string>();
+              for (const l of groupLists) {
+                const ps = placementsByList.get(l.id) ?? [];
+                for (const p of ps) {
+                  const t = tasksById.get(p.taskId);
+                  if (t && filteredTaskIdSet.has(t.id)) set.add(t.id);
+                }
+              }
+              return set.size;
+            })();
             return (
-              <section key={group.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <section
+                key={group.id}
+                className={cn(
+                  // Header-only group styling: no outer “card”. Use subtle dividers + spacing.
+                  idx === 0 ? "pt-2" : "mt-6 border-t border-slate-200 pt-6"
+                )}
+              >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-semibold text-slate-900">{group.title}</div>
-                    {group.description ? (
-                      <div className="mt-1 text-sm text-slate-500">{group.description}</div>
-                    ) : null}
+                  <div className="min-w-0">
+                      <InlineEditableText
+                        value={group.title}
+                        ariaLabel={`Rename group ${group.title}`}
+                        className="block w-full text-lg font-semibold text-slate-900"
+                        inputClassName="h-9 text-lg font-semibold"
+                        onConfirm={async (next) => {
+                          await updateTaskGroup({ id: group.id, title: next });
+                          await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+                        }}
+                      />
+                      <InlineEditableText
+                        value={group.description ?? ""}
+                        placeholder="Add group description…"
+                        ariaLabel="Edit group description"
+                        allowEmpty
+                        truncate={false}
+                        className="mt-1 block w-full text-sm text-slate-500 whitespace-normal"
+                        inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
+                        onConfirm={async (next) => {
+                          await updateTaskGroup({
+                            id: group.id,
+                            description: next.trim().length ? next.trim() : null
+                          });
+                          await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+                        }}
+                      />
+                      <div className="mt-1 text-xs text-slate-400">
+                        {groupLists.length} {groupLists.length === 1 ? "list" : "lists"} • {groupVisibleTaskCount}{" "}
+                        {groupVisibleTaskCount === 1 ? "task" : "tasks"}
+                      </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={isCollapsed ? "Expand group" : "Collapse group"}
+                      title={isCollapsed ? "Expand" : "Collapse"}
+                      onClick={(e) => {
+                        const nextCollapsed = !isCollapsed;
+                        if (e.altKey || e.shiftKey) {
+                          // Alt/Option-click or Shift-click toggles all groups together.
+                          setCollapsedGroupsById((prev) => {
+                            const next = { ...prev };
+                            for (const g of groups) next[g.id] = nextCollapsed;
+                            return next;
+                          });
+                          return;
+                        }
+
+                        setCollapsedGroupsById((prev) => ({ ...prev, [group.id]: nextCollapsed }));
+                      }}
+                    >
+                      {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                    </Button>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -848,16 +1252,9 @@ export function BoardPage() {
                       variant="ghost"
                       size="sm"
                       aria-label="Group actions"
-                      title="Rename or delete group"
+                      title="Delete group"
                       onClick={() => {
-                        setGroupTitleDraft(group.title);
-                        setGroupDescDraft(group.description ?? "");
-                        setGroupModal({
-                          mode: "rename",
-                          id: group.id,
-                          title: group.title,
-                          description: group.description ?? null
-                        });
+                        setGroupModal({ mode: "delete", id: group.id, title: group.title });
                       }}
                     >
                       <MoreHorizontal size={18} />
@@ -865,113 +1262,145 @@ export function BoardPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex gap-5 overflow-x-auto pb-2">
-                  {groupLists.map((list) => {
-                    const listPlacements = placementsByList.get(list.id) ?? [];
-                    const listTasks = listPlacements
-                      .map((p) => tasksById.get(p.taskId))
-                      .filter((t): t is Task => t != null && filteredTaskIdSet.has(t.id));
-                    const count = listTasks.length;
+                {isCollapsed ? null : (
+                  <div className="mt-4">
+                    <HorizontalScrollRow dotCount={groupLists.length}>
+                    {groupLists.map((list) => {
+                      const listPlacements = placementsByList.get(list.id) ?? [];
+                      const listTasks = listPlacements
+                        .map((p) => tasksById.get(p.taskId))
+                        .filter((t): t is Task => t != null && filteredTaskIdSet.has(t.id));
+                      const count = listTasks.length;
 
-                    const person =
-                      list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
+                      const person =
+                        list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
 
-                    return (
-                      <Card
-                        key={list.id}
-                        className="w-[320px] shrink-0 p-4"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={async (e) => {
-                          e.preventDefault();
-                          const raw = e.dataTransfer.getData(DND_MIME);
-                          const payload: DragPayload | null = raw ? JSON.parse(raw) : null;
-                          const taskId = payload?.taskId ?? e.dataTransfer.getData("text/plain");
-                          if (!taskId) return;
+                      return (
+                        <Card
+                          key={list.id}
+                          className="w-[320px] shrink-0 p-4"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            const raw = e.dataTransfer.getData(DND_MIME);
+                            const payload: DragPayload | null = raw ? JSON.parse(raw) : null;
+                            const taskId = payload?.taskId ?? e.dataTransfer.getData("text/plain");
+                            if (!taskId) return;
 
-                          try {
-                            // Default is MOVE: remove the placement from the source list unless ⌥ is held (COPY).
-                            if (!e.altKey && payload?.fromListId && payload.fromListId !== list.id) {
-                              await deleteTaskPlacementByTaskAndList({
+                            try {
+                              // Default is MOVE: remove the placement from the source list unless ⌥ is held (COPY).
+                              if (!e.altKey && payload?.fromListId && payload.fromListId !== list.id) {
+                                await deleteTaskPlacementByTaskAndList({
+                                  workspaceId,
+                                  taskId,
+                                  listId: payload.fromListId
+                                });
+                              }
+                              // Ensure the task is placed in this list (multi-placement allowed).
+                              await createTaskPlacement({
                                 workspaceId,
                                 taskId,
-                                listId: payload.fromListId
+                                listId: list.id,
+                                createdBy: session.user.id
                               });
+                              // Maintain legacy task semantics for now.
+                              if (list.type === "person" && person) {
+                                await updateTask({ id: taskId, assigneeId: person.id, location: "board" });
+                              } else {
+                                await updateTask({ id: taskId, location: "board" });
+                              }
+                              await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+                              await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+                            } catch (err) {
+                              // eslint-disable-next-line no-console
+                              console.error("[DnD] drop failed", err);
                             }
-                            // Ensure the task is placed in this list (multi-placement allowed).
-                            await createTaskPlacement({
-                              workspaceId,
-                              taskId,
-                              listId: list.id,
-                              createdBy: session.user.id
-                            });
-                            // Maintain legacy task semantics for now.
-                            if (list.type === "person" && person) {
-                              await updateTask({ id: taskId, assigneeId: person.id, location: "board" });
-                            } else {
-                              await updateTask({ id: taskId, location: "board" });
-                            }
-                            await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
-                            await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-                          } catch (err) {
-                            // eslint-disable-next-line no-console
-                            console.error("[DnD] drop failed", err);
-                          }
-                        }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {person ? (
-                              <Avatar name={person.name} src={person.avatarUrl} className="h-8 w-8 text-xs" />
-                            ) : (
-                              <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
-                                {list.type === "project" ? "P" : list.type === "time_slot" ? "T" : "L"}
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              {person ? (
+                                <Avatar name={person.name} src={person.avatarUrl} className="h-8 w-8 text-xs" />
+                              ) : (
+                                <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                                  {list.type === "project" ? "P" : list.type === "time_slot" ? "T" : "L"}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <InlineEditableText
+                                  value={list.title}
+                                  ariaLabel={`Rename list ${list.title}`}
+                                  className="block w-full font-semibold text-slate-900"
+                                  onConfirm={async (next) => {
+                                    await updateTaskList({ id: list.id, title: next });
+                                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                                  }}
+                                />
+                                <InlineEditableText
+                                  value={list.description ?? ""}
+                                  placeholder="Add list description…"
+                                  ariaLabel="Edit list description"
+                                  allowEmpty
+                                  truncate={false}
+                                  className="mt-1 block w-full text-xs text-slate-500 whitespace-normal"
+                                  inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
+                                  onConfirm={async (next) => {
+                                    await updateTaskList({
+                                      id: list.id,
+                                      description: next.trim().length ? next.trim() : null
+                                    });
+                                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                                  }}
+                                />
+                                {person ? (
+                                  <div className="mt-1 text-xs text-slate-400">Person: {person.name}</div>
+                                ) : null}
                               </div>
-                            )}
-                            <div className="font-semibold text-slate-900">{person ? person.name : list.title}</div>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
-                              {count}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label="List actions"
-                              title="Rename or delete list"
-                              onClick={() => {
-                                setListTitleDraft(list.title);
-                                setListModal({ mode: "rename", id: list.id, title: list.title });
-                              }}
-                            >
-                              <MoreHorizontal size={18} />
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 space-y-3">
-                          {listTasks.map((t) => (
-                            <TaskCard
-                              key={t.id}
-                              task={t}
-                              fromListId={list.id}
-                              onClick={() => {
-                                setDrawerMode("edit");
-                                setActiveTaskId(t.id);
-                                setDrawerOpen(true);
-                              }}
-                              display={display}
-                            />
-                          ))}
-                          {count === 0 ? (
-                            <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                              No tasks yet
                             </div>
-                          ) : null}
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
+                                {count}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label="List actions"
+                                title="Delete list"
+                                onClick={() => {
+                                  setListModal({ mode: "delete", id: list.id, title: list.title });
+                                }}
+                              >
+                                <MoreHorizontal size={18} />
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 space-y-3">
+                            {listTasks.map((t) => (
+                              <TaskCard
+                                key={t.id}
+                                task={t}
+                                fromListId={list.id}
+                                onClick={() => {
+                                  setDrawerMode("edit");
+                                  setActiveTaskId(t.id);
+                                  setDrawerOpen(true);
+                                }}
+                                display={display}
+                              />
+                            ))}
+                            {count === 0 ? (
+                              <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                                No tasks yet
+                              </div>
+                            ) : null}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                    </HorizontalScrollRow>
+                  </div>
+                )}
               </section>
             );
           })}
@@ -1010,7 +1439,9 @@ export function BoardPage() {
               createdBy: session.user.id,
               title: values.title,
               priority: values.priority,
-              location: values.location,
+              // Tasks created from the workspace page should live on the workspace canvas (board),
+              // unless explicitly set otherwise from the drawer.
+              location: createTargetListId ? "board" : values.location,
               dueDate: values.dueDate ?? undefined,
               assigneeId: values.assigneeId
             });
@@ -1031,6 +1462,7 @@ export function BoardPage() {
             // If created directly onto the board, ensure it has at least one placement so it renders.
             if (created.location === "board") {
               const list =
+                (createTargetListId ? lists.find((l) => l.id === createTargetListId) ?? null : null) ??
                 (created.assigneeId ? personListByProfileId.get(created.assigneeId) : null) ??
                 lists.find((l) => l.groupId && l.type === "person") ??
                 null;
@@ -1041,10 +1473,12 @@ export function BoardPage() {
                   listId: list.id,
                   createdBy: session.user.id
                 });
+                if (list.groupId == null && list.type !== "inbox") setLastUngroupedListId(list.id);
                 await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
               }
             }
             await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+            setCreateTargetListId(null);
             closeTaskDrawer();
             return;
           }
@@ -1131,13 +1565,7 @@ export function BoardPage() {
       {/* Workspace management */}
       <Modal
         open={Boolean(workspaceModal)}
-        title={
-          workspaceModal?.mode === "create"
-            ? "New workspace"
-            : workspaceModal?.mode === "delete"
-              ? "Delete workspace"
-              : "Rename workspace"
-        }
+        title="Delete workspace"
         onClose={() => setWorkspaceModal(null)}
         footer={
           workspaceModal ? (
@@ -1145,80 +1573,26 @@ export function BoardPage() {
               <Button variant="secondary" onClick={() => setWorkspaceModal(null)}>
                 Cancel
               </Button>
-              {workspaceModal.mode === "delete" ? (
-                <Button
-                  className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
-                  onClick={async () => {
-                    await deleteWorkspace({ id: workspaceModal.id as any });
-                    await qc.invalidateQueries({ queryKey: ["workspaces"] });
-                    // If you deleted the active workspace, go to demo (or first available).
-                    nav("/w/demo/board");
-                    setWorkspaceModal(null);
-                  }}
-                >
-                  Delete
-                </Button>
-              ) : (
-                <Button
-                  onClick={async () => {
-                    const name =
-                      (workspaceModal.mode === "create" ? workspaceNameDraft : workspaceNameDraft || workspaceModal.name)
-                        .trim() || "Workspace";
-                    if (workspaceModal.mode === "create") {
-                      const ws = await createWorkspace({ name });
-                      await qc.invalidateQueries({ queryKey: ["workspaces"] });
-                      nav(`/w/${ws.id}/board`);
-                      setWorkspaceModal(null);
-                      return;
-                    }
-                    const ws = await updateWorkspace({ id: workspaceModal.id as any, name });
-                    await qc.invalidateQueries({ queryKey: ["workspaces"] });
-                    await qc.invalidateQueries({ queryKey: ["workspace", ws.id] });
-                    setWorkspaceModal(null);
-                  }}
-                  disabled={
-                    workspaceModal.mode === "create"
-                      ? !workspaceNameDraft.trim().length
-                      : !(workspaceNameDraft || workspaceModal.name).trim().length
-                  }
-                >
-                  Save
-                </Button>
-              )}
+              <Button
+                className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
+                onClick={async () => {
+                  await deleteWorkspace({ id: workspaceModal.id as any });
+                  await qc.invalidateQueries({ queryKey: ["workspaces"] });
+                  // If you deleted the active workspace, go to demo (or first available).
+                  nav("/w/demo/board");
+                  setWorkspaceModal(null);
+                }}
+              >
+                Delete
+              </Button>
             </div>
           ) : null
         }
       >
-        {workspaceModal?.mode === "delete" ? (
-          <div className="text-sm text-slate-700">
-            This will delete <span className="font-medium">{workspaceModal.name}</span> and all of its data (groups, lists,
-            tasks, placements).
-          </div>
-        ) : (
-          <div>
-            <div className="text-xs font-medium text-slate-600">Name</div>
-            <Input
-              className="mt-2"
-              autoFocus
-              value={workspaceNameDraft}
-              onChange={(e) => setWorkspaceNameDraft(e.target.value)}
-              placeholder="Workspace name"
-            />
-            {workspaceModal?.mode === "rename" ? (
-              <div className="mt-3 text-xs text-slate-500">
-                Want to delete instead?{" "}
-                <button
-                  className="text-rose-700 hover:underline"
-                  onClick={() =>
-                    setWorkspaceModal({ mode: "delete", id: workspaceModal.id, name: workspaceModal.name })
-                  }
-                >
-                  Delete workspace
-                </button>
-              </div>
-            ) : null}
-          </div>
-        )}
+        <div className="text-sm text-slate-700">
+          This will delete <span className="font-medium">{workspaceModal?.name}</span> and all of its data (groups, lists,
+          tasks, placements).
+        </div>
       </Modal>
 
       {/* Group management */}

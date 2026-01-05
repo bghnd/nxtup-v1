@@ -1,21 +1,25 @@
 import React from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
-import { Bell, Inbox, LayoutDashboard, LogOut, Settings, Trello, Users } from "lucide-react";
+import { Bell, Inbox, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Settings, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "../lib/cn";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
+import { InlineEditableText } from "../components/InlineEditableText";
 import { SupabaseAuthModal } from "../components/SupabaseAuthModal";
 import { useStubSession } from "../../auth/stubAuth";
 import { consumeSupabaseRedirectFromUrl, getSupabaseSession, onSupabaseAuthChange } from "../../auth/supabaseAuth";
 import { ensureSupabaseDemoWorkspace, getLastSupabaseWorkspaceId } from "../../auth/supabaseBootstrap";
 import {
+  createWorkspace,
   createTaskPlacement,
   deleteTaskPlacementByTaskAndList,
+  listWorkspaces,
   listTaskLists,
   listTasks,
+  updateWorkspace,
   updateTask
 } from "../../data/client";
 import { getAdapterKind, useMockAdapter, useSupabaseAdapter } from "../../data/adapter";
@@ -116,6 +120,11 @@ export function AppLayout() {
 
   // While any context panel is open, L1 must be rail-collapsed (icon-only).
   const effectiveSidebarCollapsed = panel ? true : sidebarCollapsed;
+  const collapseButtonLabel = panel
+    ? "Close panel and expand sidebar"
+    : effectiveSidebarCollapsed
+      ? "Expand sidebar"
+      : "Collapse sidebar";
 
   React.useEffect(() => {
     try {
@@ -144,11 +153,19 @@ export function AppLayout() {
     queryKey: ["taskLists", workspaceId ?? "demo"],
     queryFn: () => listTaskLists(workspaceId ?? "demo")
   });
+  const workspacesQ = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => listWorkspaces()
+  });
   const allTasks = tasksQ.data ?? [];
   const inboxTasks = allTasks.filter((t) => t.location === "inbox");
   const inboxCount = inboxTasks.length;
   const displayPrefs = React.useMemo(() => loadDisplayPrefs(), []);
   const inboxListId = (listsQ.data ?? []).find((l) => l.type === "inbox")?.id ?? null;
+  const workspaces = workspacesQ.data ?? [];
+
+  const [createWsOpen, setCreateWsOpen] = React.useState(false);
+  const [createWsName, setCreateWsName] = React.useState("");
 
   React.useEffect(() => {
     const useSupabase = (import.meta.env.VITE_USE_SUPABASE as string | undefined) === "1";
@@ -277,33 +294,35 @@ export function AppLayout() {
         {/* Sidebar */}
         <aside
           className={cn(
-            "h-full shrink-0 border-r border-slate-200 bg-white overflow-y-auto",
+            "h-full shrink-0 border-r border-slate-200 bg-white overflow-hidden flex flex-col",
             effectiveSidebarCollapsed ? "w-[76px] px-2" : "w-[240px] px-3"
           )}
         >
-          <div className={cn("flex items-center justify-between", effectiveSidebarCollapsed ? "px-1 py-3" : "px-2 py-3")}>
-            {!effectiveSidebarCollapsed ? (
-              <div className="text-xs font-medium text-slate-500">Team Board</div>
-            ) : (
-              <div className="sr-only">Team Board</div>
-            )}
+          <div className={cn("flex items-center px-1 py-3", effectiveSidebarCollapsed ? "justify-center" : "justify-end")}>
             <Button
               variant="ghost"
               size="sm"
-              aria-label={effectiveSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={effectiveSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapseButtonLabel}
+              title={collapseButtonLabel}
               onClick={() => {
                 setCollapseMode("manual");
+                // If L2 panel is open, it forces L1 into rail-collapsed.
+                // Clicking the control should close L2 and expand L1 in one step.
+                if (panel) {
+                  setPanel(null);
+                  setSidebarCollapsed(false);
+                  return;
+                }
                 setSidebarCollapsed((v) => !v);
               }}
-              disabled={Boolean(panel)}
               className={cn(effectiveSidebarCollapsed ? "h-8 w-8 px-0" : "h-8")}
             >
-              {effectiveSidebarCollapsed ? "»" : "«"}
+              {effectiveSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </Button>
           </div>
 
-          <nav className="mt-1 space-y-1">
+          <div className="flex-1 overflow-y-auto pb-3">
+            <nav className="mt-1 space-y-1">
             <button
               className={cn(
                 navItem,
@@ -395,16 +414,6 @@ export function AppLayout() {
               )}
             </button>
             <NavLink
-              to={`${base}/board`}
-              className={({ isActive }) =>
-                cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
-              }
-              title={effectiveSidebarCollapsed ? "Team Board" : undefined}
-            >
-              <Trello size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? <span>Team Board</span> : <span className="sr-only">Team Board</span>}
-            </NavLink>
-            <NavLink
               to={`${base}/dashboard`}
               className={({ isActive }) =>
                 cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
@@ -414,47 +423,139 @@ export function AppLayout() {
               <LayoutDashboard size={18} className="text-slate-500" />
               {!effectiveSidebarCollapsed ? <span>My Dashboard</span> : <span className="sr-only">My Dashboard</span>}
             </NavLink>
-          </nav>
+            </nav>
 
-          <div className={cn("mt-6", sidebarCollapsed ? "px-1 py-2" : "px-2 py-2")}>
-            {!sidebarCollapsed ? (
-              <div className="text-xs font-medium text-slate-500">Workspace</div>
-            ) : (
-              <div className="sr-only">Workspace</div>
-            )}
+            <div className={cn("mt-6", effectiveSidebarCollapsed ? "px-1 py-2" : "px-2 py-2")}>
+              {!effectiveSidebarCollapsed ? (
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-slate-500">Workspaces</div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Start new workspace"
+                    title="Start new workspace"
+                    className="h-7 w-7 px-0"
+                    onClick={() => {
+                      setCreateWsOpen((v) => !v);
+                      setCreateWsName("");
+                    }}
+                  >
+                    <Plus size={16} className="text-slate-600" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="sr-only">Workspaces</div>
+              )}
+            </div>
+
+            {createWsOpen && !effectiveSidebarCollapsed ? (
+              <div className="px-2">
+                <input
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="Workspace name…"
+                  value={createWsName}
+                  onChange={(e) => setCreateWsName(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setCreateWsOpen(false);
+                      setCreateWsName("");
+                      return;
+                    }
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const name = createWsName.trim();
+                    if (!name.length) return;
+                    const ws = await createWorkspace({ name });
+                    await qc.invalidateQueries({ queryKey: ["workspaces"] });
+                    setCreateWsOpen(false);
+                    setCreateWsName("");
+                    nav(`/w/${ws.id}/board`);
+                  }}
+                />
+                <div className="mt-1 text-[11px] text-slate-500">Enter to create • Esc to cancel</div>
+              </div>
+            ) : null}
+
+            <nav className="mt-2 space-y-1">
+              {workspaces.map((w) => {
+                const active = (workspaceId ?? "demo") === w.id;
+                return (
+                  <button
+                    key={w.id}
+                    className={cn(
+                      navItem,
+                      effectiveSidebarCollapsed && "justify-center px-2",
+                      active && navItemActive,
+                      "w-full text-left"
+                    )}
+                    onClick={() => nav(`/w/${w.id}/board`)}
+                    title={effectiveSidebarCollapsed ? w.name : undefined}
+                  >
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                      {(w.name?.trim()?.[0] ?? "W").toUpperCase()}
+                    </div>
+                    {!effectiveSidebarCollapsed ? (
+                      <InlineEditableText
+                        value={w.name}
+                        ariaLabel={`Rename workspace ${w.name}`}
+                        className="text-sm font-medium text-slate-800"
+                        onConfirm={async (next) => {
+                          await updateWorkspace({ id: w.id, name: next });
+                          await qc.invalidateQueries({ queryKey: ["workspaces"] });
+                        }}
+                      />
+                    ) : (
+                      <span className="sr-only">{w.name}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
-          <nav className="mt-1 space-y-1">
-            <NavLink
-              to={`${base}/settings/members`}
-              className={({ isActive }) =>
-                cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
-              }
-              title={effectiveSidebarCollapsed ? "Members" : undefined}
-            >
-              <Users size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? <span>Members</span> : <span className="sr-only">Members</span>}
-            </NavLink>
-            <NavLink
-              to={`${base}/settings/general`}
-              className={({ isActive }) =>
-                cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
-              }
-              title={effectiveSidebarCollapsed ? "Settings" : undefined}
-            >
-              <Settings size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? <span>Settings</span> : <span className="sr-only">Settings</span>}
-            </NavLink>
-          </nav>
 
-          <div className="mt-6 border-t border-slate-100 pt-3" />
+          {/* Bottom settings group */}
+          <div className={cn("border-t border-slate-100 pt-3", effectiveSidebarCollapsed ? "pb-3" : "pb-4")}>
+            {!effectiveSidebarCollapsed ? (
+              <div className="px-2 pb-2 text-xs font-medium text-slate-500">Settings</div>
+            ) : (
+              <div className="sr-only">Settings</div>
+            )}
+            <nav className="space-y-1">
+              <NavLink
+                to={`${base}/settings/members`}
+                className={({ isActive }) =>
+                  cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
+                }
+                title={effectiveSidebarCollapsed ? "Members" : undefined}
+              >
+                <Users size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? <span>Members</span> : <span className="sr-only">Members</span>}
+              </NavLink>
+              <NavLink
+                to={`${base}/settings/general`}
+                className={({ isActive }) =>
+                  cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
+                }
+                title={effectiveSidebarCollapsed ? "Settings" : undefined}
+              >
+                <Settings size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? <span>Settings</span> : <span className="sr-only">Settings</span>}
+              </NavLink>
 
-          <button
-            className={cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", "w-full")}
-            title={effectiveSidebarCollapsed ? "Logout" : undefined}
-          >
-            <LogOut size={18} className="text-slate-500" />
-            {!effectiveSidebarCollapsed ? <span>Logout</span> : <span className="sr-only">Logout</span>}
-          </button>
+              <button
+                className={cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", "w-full text-left")}
+                title={effectiveSidebarCollapsed ? "Logout" : undefined}
+                onClick={() => {
+                  // Stub logout placeholder (real logout lives in Supabase modal today).
+                  setAuthOpen(true);
+                }}
+              >
+                <LogOut size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? <span>Logout</span> : <span className="sr-only">Logout</span>}
+              </button>
+            </nav>
+          </div>
         </aside>
 
         {panel ? (
