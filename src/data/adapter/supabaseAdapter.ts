@@ -2,17 +2,13 @@ import type { DataAdapter } from "./types";
 import type {
   Invite,
   Profile,
-  ProfileId,
   Task,
   TaskGroup,
   TaskList,
   TaskPlacement,
-  TaskParticipant,
-  TaskParticipantRole,
   Workspace,
   WorkspaceId
 } from "../../domain/types";
-import type { WorkspaceRole } from "../../domain/types";
 import type {
   CreateInviteInput,
   CreateTaskInput,
@@ -28,13 +24,6 @@ function assertEnv() {
   if (!url || !key) {
     throw new Error("Supabase env missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local.");
   }
-}
-
-async function requireAuthUserId(): Promise<string> {
-  const s = await supabase.auth.getSession();
-  const id = s.data.session?.user?.id;
-  if (!id) throw new Error("Not authenticated with Supabase.");
-  return id;
 }
 
 function mapWorkspace(row: any): Workspace {
@@ -97,77 +86,7 @@ function mapPlacement(row: any): TaskPlacement {
   };
 }
 
-function mapParticipant(row: any): TaskParticipant {
-  return {
-    workspaceId: row.workspace_id,
-    taskId: row.task_id,
-    profileId: row.profile_id,
-    role: row.role,
-    createdBy: row.created_by,
-    createdAt: row.created_at
-  };
-}
-
 export const supabaseAdapter: DataAdapter = {
-  async listWorkspaces() {
-    assertEnv();
-    const authUserId = await requireAuthUserId();
-    // Prefer membership-driven listing.
-    const { data, error } = await supabase
-      .from("workspace_members")
-      .select("workspace_id,workspaces:workspace_id(id,name,created_by)")
-      .eq("profile_id", authUserId)
-      .neq("status", "removed");
-    if (error) throw error;
-    const rows = (data ?? [])
-      .map((r: any) => r.workspaces)
-      .filter(Boolean)
-      .map(mapWorkspace);
-    // Dedup just in case.
-    const m = new Map<string, Workspace>();
-    for (const w of rows) m.set(w.id, w);
-    return Array.from(m.values()).sort((a, b) => (a.name < b.name ? -1 : 1));
-  },
-
-  async createWorkspace(input: { name: string }) {
-    assertEnv();
-    const authUserId = await requireAuthUserId();
-    const ws = await supabase
-      .from("workspaces")
-      .insert({ name: input.name.trim() || "Workspace", created_by: authUserId })
-      .select("*")
-      .single();
-    if (ws.error) throw ws.error;
-
-    // Ensure creator membership.
-    const mem = await supabase.from("workspace_members").upsert({
-      workspace_id: ws.data.id,
-      profile_id: authUserId,
-      role: "owner",
-      status: "active"
-    });
-    if (mem.error) throw mem.error;
-    return mapWorkspace(ws.data);
-  },
-
-  async updateWorkspace(input: { id: WorkspaceId; name: string }) {
-    assertEnv();
-    const { data, error } = await supabase
-      .from("workspaces")
-      .update({ name: input.name.trim() || "Workspace" })
-      .eq("id", input.id)
-      .select("*")
-      .single();
-    if (error) throw error;
-    return mapWorkspace(data);
-  },
-
-  async deleteWorkspace(input: { id: WorkspaceId }) {
-    assertEnv();
-    const { error } = await supabase.from("workspaces").delete().eq("id", input.id);
-    if (error) throw error;
-  },
-
   async getWorkspace(workspaceId: WorkspaceId) {
     assertEnv();
     const { data, error } = await supabase.from("workspaces").select("*").eq("id", workspaceId).single();
@@ -182,40 +101,6 @@ export const supabaseAdapter: DataAdapter = {
     const { data, error } = await supabase.from("profiles").select("*");
     if (error) throw error;
     return (data ?? []).map(mapProfile);
-  },
-
-  async createMemberPlaceholder(input: {
-    workspaceId: WorkspaceId;
-    name: string;
-    email?: string | null;
-    role?: WorkspaceRole;
-    status?: "active" | "invited";
-  }) {
-    assertEnv();
-    const authUserId = await requireAuthUserId();
-    const id = crypto.randomUUID();
-    const profileIns = await supabase
-      .from("profiles")
-      .insert({
-        id,
-        name: input.name.trim() || "New member",
-        email: input.email ?? null,
-        avatar_url: null
-      })
-      .select("*")
-      .single();
-    if (profileIns.error) throw profileIns.error;
-    const mem = await supabase.from("workspace_members").upsert({
-      workspace_id: input.workspaceId,
-      profile_id: id,
-      role: input.role ?? "member",
-      status: input.status ?? "invited",
-      created_at: new Date().toISOString()
-    });
-    if (mem.error) throw mem.error;
-    // Keep current user as creator in invites/membership rules; this just creates a placeholder member row.
-    void authUserId;
-    return mapProfile(profileIns.data);
   },
 
   async listWorkspaceMembers(workspaceId: WorkspaceId) {
@@ -251,7 +136,6 @@ export const supabaseAdapter: DataAdapter = {
 
   async createInvite(input: CreateInviteInput) {
     assertEnv();
-    const authUserId = await requireAuthUserId();
     const token = `inv_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
@@ -262,7 +146,7 @@ export const supabaseAdapter: DataAdapter = {
         role: input.role,
         token,
         expires_at: expiresAt,
-        created_by: authUserId
+        created_by: input.createdBy
       })
       .select("*")
       .single();
@@ -285,26 +169,6 @@ export const supabaseAdapter: DataAdapter = {
     throw new Error("Invite acceptance not implemented in Supabase adapter yet (use mock mode for now).");
   },
 
-  async setMemberRole(input: { workspaceId: WorkspaceId; profileId: ProfileId; role: WorkspaceRole }) {
-    assertEnv();
-    const { error } = await supabase
-      .from("workspace_members")
-      .update({ role: input.role })
-      .eq("workspace_id", input.workspaceId)
-      .eq("profile_id", input.profileId);
-    if (error) throw error;
-  },
-
-  async removeMember(input: { workspaceId: WorkspaceId; profileId: ProfileId }) {
-    assertEnv();
-    const { error } = await supabase
-      .from("workspace_members")
-      .update({ status: "removed" })
-      .eq("workspace_id", input.workspaceId)
-      .eq("profile_id", input.profileId);
-    if (error) throw error;
-  },
-
   async listTasks(workspaceId: WorkspaceId) {
     assertEnv();
     const { data, error } = await supabase.from("tasks").select("*").eq("workspace_id", workspaceId);
@@ -319,89 +183,11 @@ export const supabaseAdapter: DataAdapter = {
     return (data ?? []).map(mapGroup);
   },
 
-  async createTaskGroup(input: { workspaceId: WorkspaceId; title: string; description?: string | null }) {
-    assertEnv();
-    const authUserId = await requireAuthUserId();
-    const { data, error } = await supabase
-      .from("task_groups")
-      .insert({
-        workspace_id: input.workspaceId,
-        title: input.title.trim() || "Group",
-        description: input.description ?? null,
-        sort_order: 0,
-        created_by: authUserId
-      })
-      .select("*")
-      .single();
-    if (error) throw error;
-    return mapGroup(data);
-  },
-
-  async updateTaskGroup(input: { id: string; title?: string; description?: string | null; sortOrder?: number }) {
-    assertEnv();
-    const patch: any = {};
-    if (input.title !== undefined) patch.title = input.title;
-    if (input.description !== undefined) patch.description = input.description;
-    if (input.sortOrder !== undefined) patch.sort_order = input.sortOrder;
-    const { data, error } = await supabase.from("task_groups").update(patch).eq("id", input.id).select("*").single();
-    if (error) throw error;
-    return mapGroup(data);
-  },
-
-  async deleteTaskGroup(input: { id: string }) {
-    assertEnv();
-    const { error } = await supabase.from("task_groups").delete().eq("id", input.id);
-    if (error) throw error;
-  },
-
   async listTaskLists(workspaceId: WorkspaceId) {
     assertEnv();
     const { data, error } = await supabase.from("task_lists").select("*").eq("workspace_id", workspaceId).order("sort_order");
     if (error) throw error;
     return (data ?? []).map(mapList);
-  },
-
-  async createTaskList(input: {
-    workspaceId: WorkspaceId;
-    groupId: string | null;
-    type: TaskList["type"];
-    refId?: string | null;
-    title: string;
-  }) {
-    assertEnv();
-    const authUserId = await requireAuthUserId();
-    const { data, error } = await supabase
-      .from("task_lists")
-      .insert({
-        workspace_id: input.workspaceId,
-        group_id: input.groupId,
-        type: input.type,
-        ref_id: input.refId ?? null,
-        title: input.title.trim() || "List",
-        sort_order: 0,
-        created_by: authUserId
-      })
-      .select("*")
-      .single();
-    if (error) throw error;
-    return mapList(data);
-  },
-
-  async updateTaskList(input: { id: string; groupId?: string | null; title?: string; sortOrder?: number }) {
-    assertEnv();
-    const patch: any = {};
-    if (input.groupId !== undefined) patch.group_id = input.groupId;
-    if (input.title !== undefined) patch.title = input.title;
-    if (input.sortOrder !== undefined) patch.sort_order = input.sortOrder;
-    const { data, error } = await supabase.from("task_lists").update(patch).eq("id", input.id).select("*").single();
-    if (error) throw error;
-    return mapList(data);
-  },
-
-  async deleteTaskList(input: { id: string }) {
-    assertEnv();
-    const { error } = await supabase.from("task_lists").delete().eq("id", input.id);
-    if (error) throw error;
   },
 
   async listTaskPlacements(workspaceId: WorkspaceId) {
@@ -413,20 +199,15 @@ export const supabaseAdapter: DataAdapter = {
 
   async createTaskPlacement(input: CreateTaskPlacementInput) {
     assertEnv();
-    const authUserId = await requireAuthUserId();
     const { data, error } = await supabase
       .from("task_placements")
-      // Idempotent upsert to match mock behavior: a task can be dropped onto a list it’s already in.
-      .upsert(
-        {
-          workspace_id: input.workspaceId,
-          task_id: input.taskId,
-          list_id: input.listId,
-          position: input.position ?? 0,
-          created_by: authUserId
-        },
-        { onConflict: "task_id,list_id" }
-      )
+      .insert({
+        workspace_id: input.workspaceId,
+        task_id: input.taskId,
+        list_id: input.listId,
+        position: input.position ?? 0,
+        created_by: input.createdBy
+      })
       .select("*")
       .single();
     if (error) throw error;
@@ -465,56 +246,8 @@ export const supabaseAdapter: DataAdapter = {
     if (error) throw error;
   },
 
-  async listTaskParticipants(workspaceId: WorkspaceId) {
-    assertEnv();
-    const { data, error } = await supabase.from("task_participants").select("*").eq("workspace_id", workspaceId);
-    if (error) throw error;
-    return (data ?? []).map(mapParticipant);
-  },
-
-  async upsertTaskParticipant(input: {
-    workspaceId: WorkspaceId;
-    taskId: string;
-    profileId: ProfileId;
-    role: TaskParticipantRole;
-    createdBy: ProfileId;
-  }) {
-    assertEnv();
-    const authUserId = await requireAuthUserId();
-    // createdBy should always be the current auth user in Supabase mode.
-    void input.createdBy;
-    const { data, error } = await supabase
-      .from("task_participants")
-      .upsert(
-        {
-          workspace_id: input.workspaceId,
-          task_id: input.taskId,
-          profile_id: input.profileId,
-          role: input.role,
-          created_by: authUserId
-        },
-        { onConflict: "task_id,profile_id" }
-      )
-      .select("*")
-      .single();
-    if (error) throw error;
-    return mapParticipant(data);
-  },
-
-  async removeTaskParticipant(input: { workspaceId: WorkspaceId; taskId: string; profileId: ProfileId }) {
-    assertEnv();
-    const { error } = await supabase
-      .from("task_participants")
-      .delete()
-      .eq("workspace_id", input.workspaceId)
-      .eq("task_id", input.taskId)
-      .eq("profile_id", input.profileId);
-    if (error) throw error;
-  },
-
   async createTask(input: CreateTaskInput) {
     assertEnv();
-    const authUserId = await requireAuthUserId();
     const { data, error } = await supabase
       .from("tasks")
       .insert({
@@ -526,7 +259,7 @@ export const supabaseAdapter: DataAdapter = {
         due_date: input.dueDate ?? null,
         status: "active",
         assignee_id: input.assigneeId ?? null,
-        created_by: authUserId
+        created_by: input.createdBy
       })
       .select("*")
       .single();

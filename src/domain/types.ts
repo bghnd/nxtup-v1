@@ -16,7 +16,7 @@ export type TaskListType = "inbox" | "person" | "project" | "time_slot" | "calen
 export type Profile = {
   id: ProfileId;
   name: string;
-  email: string | null;
+  email: string;
   avatarUrl?: string | null;
 };
 
@@ -98,17 +98,6 @@ export type TaskPlacement = {
    * Lower numbers appear higher in the list. (Manual ordering foundation)
    */
   position: number;
-  createdBy: ProfileId;
-  createdAt: string; // ISO
-};
-
-export type TaskParticipantRole = "watcher" | "tracker";
-
-export type TaskParticipant = {
-  workspaceId: WorkspaceId;
-  taskId: TaskId;
-  profileId: ProfileId;
-  role: TaskParticipantRole;
   createdBy: ProfileId;
   createdAt: string; // ISO
 };

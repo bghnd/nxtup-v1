@@ -4,7 +4,7 @@ import { Pin, PinOff, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { Button } from "../../components/Button";
 
-export type PanelType = "inbox" | "onlyme" | "raw";
+export type PanelType = "inbox" | "activity" | "saved";
 
 export function ContextPanel({
   panel,
@@ -58,11 +58,11 @@ export function ContextPanel({
           <TabButton active={panel === "inbox"} onClick={() => onSelectPanel("inbox")}>
             Inbox
           </TabButton>
-          <TabButton active={panel === "onlyme"} onClick={() => onSelectPanel("onlyme")}>
-            OnlyMe
+          <TabButton active={panel === "activity"} onClick={() => onSelectPanel("activity")} disabled>
+            Activity
           </TabButton>
-          <TabButton active={panel === "raw"} onClick={() => onSelectPanel("raw")}>
-            Raw Mode
+          <TabButton active={panel === "saved"} onClick={() => onSelectPanel("saved")} disabled>
+            Saved
           </TabButton>
         </div>
 

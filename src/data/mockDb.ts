@@ -5,7 +5,6 @@ import type {
   TaskGroup,
   TaskList,
   TaskPlacement,
-  TaskParticipant,
   Workspace,
   WorkspaceMember
 } from "../domain/types";
@@ -136,8 +135,6 @@ export const demoTaskLists: TaskList[] = [
 ];
 
 export const demoTaskPlacements: TaskPlacement[] = [];
-
-export const demoTaskParticipants: TaskParticipant[] = [];
 
 export const demoTasks: Task[] = [
   {

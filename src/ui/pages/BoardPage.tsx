@@ -1,38 +1,22 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, Eye, Filter, MoreHorizontal, Plus, Tag, Users } from "lucide-react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Calendar, Eye, Filter, Plus, Tag, Users } from "lucide-react";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import {
-  createTaskGroup,
-  createTaskList,
-  createMemberPlaceholder,
-  createInvite,
   createTask,
   createTaskPlacement,
-  createWorkspace,
   deleteTask,
-  deleteTaskGroup,
-  deleteTaskList,
   deleteTaskPlacementByTaskAndList,
-  deleteWorkspace,
   getWorkspace,
   listProfiles,
-  listWorkspaces,
   listTaskGroups,
   listTaskLists,
   listTaskPlacements,
   listTasks,
-  listTaskParticipants,
-  removeTaskParticipant,
-  upsertTaskParticipant,
-  updateWorkspace,
-  updateTaskGroup,
-  updateTaskList,
   updateTask
 } from "../../data/client";
 import type { Profile, Task, TaskGroup, TaskList, TaskPlacement } from "../../domain/types";
-import type { TaskParticipant } from "../../domain/types";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
@@ -62,7 +46,6 @@ export function BoardPage() {
   const { workspaceId = "demo" } = useParams();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const nav = useNavigate();
   const { session } = useStubSession();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [drawerMode, setDrawerMode] = React.useState<"create" | "edit">("create");
@@ -71,59 +54,6 @@ export function BoardPage() {
   const [displayOpen, setDisplayOpen] = React.useState(false);
   const [display, setDisplay] = React.useState<DisplayPrefs>(() => loadDisplayPrefs());
   const [quickAddText, setQuickAddText] = React.useState("");
-  const [quickAddActiveIdx, setQuickAddActiveIdx] = React.useState(0);
-
-  // Workspace / group / list management modals
-  const [workspaceModal, setWorkspaceModal] = React.useState<
-    | null
-    | { mode: "create" }
-    | { mode: "rename"; id: string; name: string }
-    | { mode: "delete"; id: string; name: string }
-  >(null);
-  const [workspaceNameDraft, setWorkspaceNameDraft] = React.useState("");
-
-  const [groupModal, setGroupModal] = React.useState<
-    | null
-    | { mode: "create" }
-    | { mode: "rename"; id: string; title: string; description: string | null }
-    | { mode: "delete"; id: string; title: string }
-  >(null);
-  const [groupTitleDraft, setGroupTitleDraft] = React.useState("");
-  const [groupDescDraft, setGroupDescDraft] = React.useState("");
-
-  const [listModal, setListModal] = React.useState<
-    | null
-    | { mode: "create"; groupId: string | null }
-    | { mode: "rename"; id: string; title: string }
-    | { mode: "delete"; id: string; title: string }
-  >(null);
-  const [listTitleDraft, setListTitleDraft] = React.useState("");
-  const [listTypeDraft, setListTypeDraft] = React.useState<TaskList["type"]>("other");
-
-  const [unknownMemberModal, setUnknownMemberModal] = React.useState<
-    | null
-    | {
-        taskPart: string;
-        op: null | "move" | "add";
-        listPart: string | null;
-        kind: "owner" | "watcher";
-        token: string;
-        ownerId: string | null;
-        watcherIds: string[];
-      }
-  >(null);
-  const [unknownMemberNameDraft, setUnknownMemberNameDraft] = React.useState("");
-  const [unknownMemberEmailDraft, setUnknownMemberEmailDraft] = React.useState("");
-  const [unknownMemberSendInvite, setUnknownMemberSendInvite] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!workspaceModal) return;
-    if (workspaceModal.mode === "create") {
-      setWorkspaceNameDraft("");
-    } else {
-      setWorkspaceNameDraft(workspaceModal.name);
-    }
-  }, [workspaceModal]);
 
   React.useEffect(() => {
     try {
@@ -136,11 +66,6 @@ export function BoardPage() {
   const workspaceQ = useQuery({
     queryKey: ["workspace", workspaceId],
     queryFn: () => getWorkspace(workspaceId)
-  });
-
-  const workspacesQ = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: () => listWorkspaces()
   });
 
   const profilesQ = useQuery({
@@ -168,24 +93,13 @@ export function BoardPage() {
     queryFn: () => listTaskPlacements(workspaceId)
   });
 
-  const participantsQ = useQuery({
-    queryKey: ["taskParticipants", workspaceId],
-    queryFn: () => listTaskParticipants(workspaceId)
-  });
-
   const workspaceName = workspaceQ.data?.name ?? "Workspace";
-  const workspaces = workspacesQ.data ?? [];
   const profiles = profilesQ.data ?? [];
   const tasks = tasksQ.data ?? [];
   const groups = groupsQ.data ?? [];
   const lists = listsQ.data ?? [];
   const placements = placementsQ.data ?? [];
-  const participants = participantsQ.data ?? [];
   const activeTask = activeTaskId ? tasks.find((t) => t.id === activeTaskId) ?? null : null;
-  const activeParticipants = React.useMemo(() => {
-    if (!activeTask) return [];
-    return participants.filter((p) => p.taskId === activeTask.id);
-  }, [participants, activeTask]);
 
   const boardTasks = tasks.filter((t) => t.location === "board");
 
@@ -204,16 +118,6 @@ export function BoardPage() {
     setDrawerOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-
-  function closeTaskDrawer() {
-    setDrawerOpen(false);
-    setActiveTaskId(null);
-    if (searchParams.get("task")) {
-      const next = new URLSearchParams(searchParams);
-      next.delete("task");
-      setSearchParams(next, { replace: true });
-    }
-  }
 
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
   const priority = (searchParams.get("priority") ?? "").trim().toLowerCase();
@@ -308,227 +212,36 @@ export function BoardPage() {
 
   const inboxList = React.useMemo(() => lists.find((l) => l.type === "inbox") ?? null, [lists]);
 
-  const quickEntry = React.useMemo(() => parseQuickEntry(quickAddText), [quickAddText]);
-
   const quickAddSuggestions = React.useMemo(() => {
-    const raw = stripPeopleHints(quickEntry.taskPart).trim().toLowerCase();
+    const raw = quickAddText.trim().toLowerCase();
     if (raw.length < 3) return [];
     return tasks
       .filter((t) => t.title.toLowerCase().includes(raw))
       .slice(0, 5);
-  }, [quickEntry.taskPart, tasks]);
+  }, [quickAddText, tasks]);
 
-  React.useEffect(() => {
-    // When suggestions change, snap the active selection back to the top.
-    setQuickAddActiveIdx(0);
-  }, [quickAddSuggestions.length, quickAddText]);
-
-  function findProfileIdByToken(token: string): string | null {
-    const t = token.trim().toLowerCase();
-    if (!t) return null;
+  function parseAssigneeIdFromText(text: string): string | null {
+    const at = text.match(/@([a-zA-Z][a-zA-Z0-9_-]*)/);
+    const paren = text.match(/\(([^\)]+)\)/);
+    const token = (at?.[1] ?? paren?.[1] ?? "").trim().toLowerCase();
+    if (!token) return null;
     const match =
-      profiles.find((p) => p.name.toLowerCase() === t) ??
-      profiles.find((p) => p.name.toLowerCase().startsWith(t)) ??
-      profiles.find((p) => p.name.toLowerCase().includes(t));
+      profiles.find((p) => p.name.toLowerCase() === token) ??
+      profiles.find((p) => p.name.toLowerCase().startsWith(token)) ??
+      profiles.find((p) => p.name.toLowerCase().includes(token));
     return match?.id ?? null;
   }
 
-  function extractOwnerToken(text: string): string | null {
-    const at = text.match(/@([a-zA-Z][a-zA-Z0-9_-]*)/);
-    return at?.[1] ? at[1].trim() : null;
-  }
-
-  function extractWatcherTokens(text: string): string[] {
-    const tokens: string[] = [];
-    const matches = text.matchAll(/\(([^\)]+)\)/g);
-    for (const m of matches) {
-      const raw = (m[1] ?? "").trim();
-      if (!raw.length) continue;
-      // Support "(Bob, Charlie)" style.
-      for (const part of raw.split(",")) {
-        const t = part.trim();
-        if (t.length) tokens.push(t);
-      }
-    }
-    return tokens;
-  }
-
-  function parseOwnerIdFromText(text: string): string | null {
-    const token = extractOwnerToken(text);
-    if (!token) return null;
-    return findProfileIdByToken(token);
-  }
-
-  function parseWatcherIdsFromText(text: string): string[] {
-    const ids: string[] = [];
-    const seen = new Set<string>();
-    for (const token of extractWatcherTokens(text)) {
-      const id = findProfileIdByToken(token);
-      if (!id) continue;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      ids.push(id);
-    }
-    return ids;
-  }
-
-  function firstUnknownToken(text: string): { kind: "owner" | "watcher"; token: string } | null {
-    const ownerToken = extractOwnerToken(text);
-    if (ownerToken && !findProfileIdByToken(ownerToken)) return { kind: "owner", token: ownerToken };
-    for (const w of extractWatcherTokens(text)) {
-      if (!findProfileIdByToken(w)) return { kind: "watcher", token: w };
-    }
-    return null;
-  }
-
-  function stripPeopleHints(text: string) {
+  function stripAssigneeHints(text: string) {
     return text.replace(/@([a-zA-Z][a-zA-Z0-9_-]*)/g, "").replace(/\(([^\)]+)\)/g, "").trim();
-  }
-
-  async function quickCreateTaskFromEntry(input: {
-    taskPart: string;
-    ownerId: string | null;
-    watcherIds: string[];
-    titleMode: "strip" | "raw";
-    op: null | "move" | "add";
-    listPart: string | null;
-  }) {
-    const title = input.titleMode === "strip" ? stripPeopleHints(input.taskPart) : input.taskPart.trim();
-    const created = await createTask({
-      workspaceId,
-      createdBy: session.user.id,
-      title,
-      priority: "medium",
-      location: "inbox",
-      assigneeId: input.ownerId
-    });
-
-    const target = input.op ? findListFromText(input.listPart ?? "") : null;
-    const placementList = target ?? inboxList;
-    if (placementList) {
-      await createTaskPlacement({
-        workspaceId,
-        taskId: created.id,
-        listId: placementList.id,
-        createdBy: session.user.id
-      });
-      // Normalize task fields if the user created directly into a board list.
-      if (placementList.type !== "inbox") {
-        await updateTask({
-          id: created.id,
-          location: "board",
-          assigneeId: placementList.type === "person" ? (placementList.refId ?? input.ownerId) : input.ownerId
-        });
-      }
-      await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
-    }
-
-    if (input.watcherIds.length) {
-      await Promise.all(
-        input.watcherIds.map((profileId) =>
-          upsertTaskParticipant({
-            workspaceId,
-            taskId: created.id,
-            profileId,
-            role: "watcher",
-            createdBy: session.user.id
-          })
-        )
-      );
-      await qc.invalidateQueries({ queryKey: ["taskParticipants", workspaceId] });
-    }
-
-    await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-    setQuickAddText("");
-    const next = new URLSearchParams(searchParams);
-    next.delete("q");
-    setSearchParams(next, { replace: true });
-  }
-
-  function parseQuickEntry(text: string): {
-    taskPart: string;
-    op: null | "move" | "add";
-    listPart: string | null;
-  } {
-    const m = text.match(/(\+->|->)\s*([^\n]+)$/);
-    if (!m?.[0] || m.index == null) return { taskPart: text, op: null, listPart: null };
-    const op = m[1] === "+->" ? "add" : "move";
-    const listPart = (m[2] ?? "").trim();
-    const taskPart = text.slice(0, m.index).trim();
-    return { taskPart, op, listPart };
-  }
-
-  function findListFromText(text: string): TaskList | null {
-    const raw = text.trim().toLowerCase();
-    if (!raw.length) return null;
-    if (raw === "inbox" || raw === "@inbox") return inboxList;
-
-    // Allow targeting person lists by "@Name" as well as plain "Name".
-    const at = raw.startsWith("@") ? raw.slice(1).trim() : raw;
-    const profileMatch =
-      profiles.find((p) => p.name.toLowerCase() === at) ??
-      profiles.find((p) => p.name.toLowerCase().startsWith(at)) ??
-      profiles.find((p) => p.name.toLowerCase().includes(at));
-    if (profileMatch) {
-      const personList = personListByProfileId.get(profileMatch.id) ?? null;
-      if (personList) return personList;
-    }
-
-    // Fallback: match list titles.
-    return (
-      lists.find((l) => l.title.toLowerCase() === raw) ??
-      lists.find((l) => l.title.toLowerCase().startsWith(raw)) ??
-      lists.find((l) => l.title.toLowerCase().includes(raw)) ??
-      null
-    );
   }
 
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="text-2xl font-semibold text-slate-900">{workspaceName}</div>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Workspace menu"
-              title="Workspace actions"
-              onClick={() => setWorkspaceModal({ mode: "rename", id: workspaceId, name: workspaceName })}
-            >
-              <MoreHorizontal size={18} />
-            </Button>
-          </div>
+          <div className="text-2xl font-semibold text-slate-900">{workspaceName}</div>
           <div className="mt-1 text-sm text-slate-500">Team workspace / Project planning</div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Select
-              className="h-9 w-[260px]"
-              value={workspaceId}
-              onChange={(e) => {
-                const id = e.target.value;
-                nav(`/w/${id}/board`);
-              }}
-              title="Switch workspace"
-            >
-              {workspaces.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </Select>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setWorkspaceNameDraft("");
-                setWorkspaceModal({ mode: "create" });
-              }}
-            >
-              <Plus size={16} className="text-slate-600" />
-              New workspace
-            </Button>
-          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -550,6 +263,20 @@ export function BoardPage() {
       </div>
 
       <div className="mt-5 space-y-3">
+        <div className="w-full md:max-w-[520px]">
+          <input
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            placeholder="Search tasks or assignees..."
+            value={searchParams.get("q") ?? ""}
+            onChange={(e) => {
+              const next = new URLSearchParams(searchParams);
+              if (e.target.value.trim().length) next.set("q", e.target.value);
+              else next.delete("q");
+              setSearchParams(next, { replace: true });
+            }}
+          />
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm">
             <Tag size={16} className="text-slate-600" />
@@ -610,188 +337,49 @@ export function BoardPage() {
 
         <div className="w-full md:max-w-[520px]">
           <Input
-            placeholder='Search or add… (Enter opens • ⌘↵ creates • "->" moves • "+->" multi-places)'
+            placeholder='Quick add… (supports @name or "(Name)")'
             value={quickAddText}
-            onChange={(e) => {
-              const v = e.target.value;
-              setQuickAddText(v);
-              setQuickAddActiveIdx(0);
-              // Use the same input as the board search query (single source of truth).
-              const parsed = parseQuickEntry(v);
-              const q = stripPeopleHints(parsed.taskPart).trim();
-              const next = new URLSearchParams(searchParams);
-              if (q.length) next.set("q", q);
-              else next.delete("q");
-              setSearchParams(next, { replace: true });
-            }}
+            onChange={(e) => setQuickAddText(e.target.value)}
             onKeyDown={async (e) => {
-              // Keyboard navigation through suggestions (wrap-around).
-              if (e.key === "ArrowDown" && quickAddSuggestions.length) {
-                e.preventDefault();
-                setQuickAddActiveIdx((idx) => (idx + 1) % quickAddSuggestions.length);
-                return;
-              }
-              if (e.key === "ArrowUp" && quickAddSuggestions.length) {
-                e.preventDefault();
-                setQuickAddActiveIdx((idx) =>
-                  (idx - 1 + quickAddSuggestions.length) % quickAddSuggestions.length
-                );
-                return;
-              }
-              if (e.key === "Escape") {
-                // Dismiss the picker quickly.
-                e.preventDefault();
-                setQuickAddText("");
-                setQuickAddActiveIdx(0);
-                const next = new URLSearchParams(searchParams);
-                next.delete("q");
-                setSearchParams(next, { replace: true });
-                return;
-              }
               if (e.key !== "Enter") return;
-              e.preventDefault();
               const raw = quickAddText.trim();
               if (!raw.length) return;
-              const forceCreate = e.metaKey || e.ctrlKey;
-              try {
-                const parsed = parseQuickEntry(raw);
-                const targetList = parsed.op ? findListFromText(parsed.listPart ?? "") : null;
-
-                // Command: move / multi-place an existing task (when a target list is specified).
-                if (parsed.op && targetList && quickAddSuggestions.length && !forceCreate) {
-                  const selected =
-                    quickAddSuggestions[
-                      Math.max(0, Math.min(quickAddActiveIdx, quickAddSuggestions.length - 1))
-                    ];
-                  if (!selected) return;
-
-                  await createTaskPlacement({
-                    workspaceId,
-                    taskId: selected.id,
-                    listId: targetList.id,
-                    createdBy: session.user.id
-                  });
-
-                  if (parsed.op === "move") {
-                    const ps = placements.filter((p) => p.taskId === selected.id);
-                    const inboxId = inboxList?.id ?? null;
-                    const nonInbox = ps.filter((p) => p.listId !== inboxId);
-
-                    // Always remove Inbox placement when moving to a board list.
-                    if (inboxId && targetList.id !== inboxId && ps.some((p) => p.listId === inboxId)) {
-                      await deleteTaskPlacementByTaskAndList({
-                        workspaceId,
-                        taskId: selected.id,
-                        listId: inboxId
-                      });
-                    }
-
-                    // If there is exactly one non-inbox placement, treat it as the source and remove it.
-                    const singleNonInbox = nonInbox.length === 1 ? nonInbox[0]! : null;
-                    if (singleNonInbox && singleNonInbox.listId !== targetList.id) {
-                      await deleteTaskPlacementByTaskAndList({
-                        workspaceId,
-                        taskId: selected.id,
-                        listId: singleNonInbox.listId
-                      });
-                    }
-                  }
-
-                  // Keep canonical task fields consistent with list semantics.
-                  if (targetList.type === "inbox") {
-                    await updateTask({
-                      id: selected.id,
-                      location: "inbox",
-                      assigneeId: parsed.op === "move" ? null : selected.assigneeId ?? null
-                    });
-                  } else {
-                    const nextAssigneeId =
-                      targetList.type === "person" ? (targetList.refId ?? null) : selected.assigneeId ?? null;
-                    await updateTask({
-                      id: selected.id,
-                      location: "board",
-                      assigneeId: nextAssigneeId
-                    });
-                  }
-
-                  await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
-                  await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-                  setQuickAddText("");
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("q");
-                  setSearchParams(next, { replace: true });
-                  return;
-                }
-
-                // Search-first: if there are matches and the user didn't force-create, open the top match.
-                if (!forceCreate && quickAddSuggestions.length) {
-                  const selected =
-                    quickAddSuggestions[
-                      Math.max(0, Math.min(quickAddActiveIdx, quickAddSuggestions.length - 1))
-                    ];
-                  if (selected) {
-                    setDrawerMode("edit");
-                    setActiveTaskId(selected.id);
-                    setDrawerOpen(true);
-                    return;
-                  }
-                }
-                const taskPart = parsed.op ? parsed.taskPart : raw;
-                const ownerId = parseOwnerIdFromText(taskPart);
-                const watcherIds = parseWatcherIdsFromText(taskPart);
-                const unknown = firstUnknownToken(taskPart);
-                if (unknown) {
-                  setUnknownMemberNameDraft(unknown.token);
-                  setUnknownMemberEmailDraft("");
-                  setUnknownMemberSendInvite(false);
-                  setUnknownMemberModal({
-                    taskPart,
-                    op: parsed.op,
-                    listPart: parsed.listPart ?? null,
-                    kind: unknown.kind,
-                    token: unknown.token,
-                    ownerId,
-                    watcherIds
-                  });
-                  return;
-                }
-
-                await quickCreateTaskFromEntry({
-                  taskPart,
-                  ownerId,
-                  watcherIds,
-                  titleMode: "strip",
-                  op: parsed.op,
-                  listPart: parsed.listPart ?? null
+              const assigneeId = parseAssigneeIdFromText(raw);
+              const title = stripAssigneeHints(raw);
+              const created = await createTask({
+                workspaceId,
+                createdBy: session.user.id,
+                title,
+                priority: "medium",
+                location: "inbox",
+                assigneeId
+              });
+              if (inboxList) {
+                await createTaskPlacement({
+                  workspaceId,
+                  taskId: created.id,
+                  listId: inboxList.id,
+                  createdBy: session.user.id
                 });
-              } catch (err) {
-                // eslint-disable-next-line no-console
-                console.error("[QuickAdd] create failed", err);
+                await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
               }
+              await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+              setQuickAddText("");
             }}
           />
           {quickAddSuggestions.length ? (
             <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
               <div className="text-xs font-medium text-slate-600">Possible matches</div>
-              <div className="mt-1 text-xs text-slate-500">
-                Press <span className="font-medium">Enter</span> to open the top match. Press{" "}
-                <span className="font-medium">⌘↵</span> to create anyway.
-              </div>
               <div className="mt-1 space-y-1">
-                {quickAddSuggestions.map((t, idx) => (
+                {quickAddSuggestions.map((t) => (
                   <button
                     key={t.id}
-                    className={cn(
-                      "w-full rounded-md px-2 py-1 text-left text-sm text-slate-700 hover:bg-slate-50",
-                      idx === quickAddActiveIdx && "bg-blue-50 ring-1 ring-blue-500/20"
-                    )}
+                    className="w-full rounded-md px-2 py-1 text-left text-sm text-slate-700 hover:bg-slate-50"
                     onClick={() => {
                       setDrawerMode("edit");
                       setActiveTaskId(t.id);
                       setDrawerOpen(true);
                     }}
-                    onMouseEnter={() => setQuickAddActiveIdx(idx)}
-                    aria-selected={idx === quickAddActiveIdx}
                   >
                     <div className="line-clamp-1">{t.title}</div>
                   </button>
@@ -803,20 +391,6 @@ export function BoardPage() {
       </div>
 
       <div className="mt-6 space-y-6">
-        <div className="flex items-center justify-end">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setGroupTitleDraft("");
-              setGroupDescDraft("");
-              setGroupModal({ mode: "create" });
-            }}
-          >
-            <Plus size={16} className="text-slate-600" />
-            Add group
-          </Button>
-        </div>
         {groups
           .slice()
           .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -830,38 +404,6 @@ export function BoardPage() {
                     {group.description ? (
                       <div className="mt-1 text-sm text-slate-500">{group.description}</div>
                     ) : null}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        setListTitleDraft("");
-                        setListTypeDraft("other");
-                        setListModal({ mode: "create", groupId: group.id });
-                      }}
-                    >
-                      <Plus size={16} className="text-slate-600" />
-                      Add list
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Group actions"
-                      title="Rename or delete group"
-                      onClick={() => {
-                        setGroupTitleDraft(group.title);
-                        setGroupDescDraft(group.description ?? "");
-                        setGroupModal({
-                          mode: "rename",
-                          id: group.id,
-                          title: group.title,
-                          description: group.description ?? null
-                        });
-                      }}
-                    >
-                      <MoreHorizontal size={18} />
-                    </Button>
                   </div>
                 </div>
 
@@ -882,40 +424,34 @@ export function BoardPage() {
                         className="w-[320px] shrink-0 p-4"
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={async (e) => {
-                          e.preventDefault();
                           const raw = e.dataTransfer.getData(DND_MIME);
                           const payload: DragPayload | null = raw ? JSON.parse(raw) : null;
                           const taskId = payload?.taskId ?? e.dataTransfer.getData("text/plain");
                           if (!taskId) return;
 
-                          try {
-                            // Default is MOVE: remove the placement from the source list unless ⌥ is held (COPY).
-                            if (!e.altKey && payload?.fromListId && payload.fromListId !== list.id) {
-                              await deleteTaskPlacementByTaskAndList({
-                                workspaceId,
-                                taskId,
-                                listId: payload.fromListId
-                              });
-                            }
-                            // Ensure the task is placed in this list (multi-placement allowed).
-                            await createTaskPlacement({
+                          // Default is MOVE: remove the placement from the source list unless ⌥ is held (COPY).
+                          if (!e.altKey && payload?.fromListId && payload.fromListId !== list.id) {
+                            await deleteTaskPlacementByTaskAndList({
                               workspaceId,
                               taskId,
-                              listId: list.id,
-                              createdBy: session.user.id
+                              listId: payload.fromListId
                             });
-                            // Maintain legacy task semantics for now.
-                            if (list.type === "person" && person) {
-                              await updateTask({ id: taskId, assigneeId: person.id, location: "board" });
-                            } else {
-                              await updateTask({ id: taskId, location: "board" });
-                            }
-                            await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
-                            await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-                          } catch (err) {
-                            // eslint-disable-next-line no-console
-                            console.error("[DnD] drop failed", err);
                           }
+                          // Ensure the task is placed in this list (multi-placement allowed).
+                          await createTaskPlacement({
+                            workspaceId,
+                            taskId,
+                            listId: list.id,
+                            createdBy: session.user.id
+                          });
+                          // Maintain legacy task semantics for now.
+                          if (list.type === "person" && person) {
+                            await updateTask({ id: taskId, assigneeId: person.id, location: "board" });
+                          } else {
+                            await updateTask({ id: taskId, location: "board" });
+                          }
+                          await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+                          await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
                         }}
                       >
                         <div className="flex items-center justify-between">
@@ -933,18 +469,6 @@ export function BoardPage() {
                             <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
                               {count}
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label="List actions"
-                              title="Rename or delete list"
-                              onClick={() => {
-                                setListTitleDraft(list.title);
-                                setListModal({ mode: "rename", id: list.id, title: list.title });
-                              }}
-                            >
-                              <MoreHorizontal size={18} />
-                            </Button>
                           </div>
                         </div>
 
@@ -982,27 +506,14 @@ export function BoardPage() {
         mode={drawerMode}
         task={activeTask}
         profiles={profiles}
-        participants={activeParticipants as TaskParticipant[]}
-        onAddMember={async (input) => {
-          const profile = await createMemberPlaceholder({
-            workspaceId,
-            name: input.name,
-            email: input.email ?? null,
-            status: input.sendInvite ? "invited" : "active",
-            role: "member"
-          });
-          if (input.sendInvite && input.email && input.email.trim().length) {
-            await createInvite({
-              workspaceId,
-              email: input.email.trim(),
-              role: "member",
-              createdBy: session.user.id as any
-            });
+        onClose={() => {
+          setDrawerOpen(false);
+          if (searchParams.get("task")) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("task");
+            setSearchParams(next, { replace: true });
           }
-          await qc.invalidateQueries({ queryKey: ["profiles", workspaceId] });
-          return profile;
         }}
-        onClose={closeTaskDrawer}
         onSave={async (values) => {
           if (drawerMode === "create") {
             const created = await createTask({
@@ -1014,20 +525,6 @@ export function BoardPage() {
               dueDate: values.dueDate ?? undefined,
               assigneeId: values.assigneeId
             });
-            if (values.watcherIds.length) {
-              await Promise.all(
-                values.watcherIds.map((profileId) =>
-                  upsertTaskParticipant({
-                    workspaceId,
-                    taskId: created.id,
-                    profileId,
-                    role: "watcher",
-                    createdBy: session.user.id
-                  })
-                )
-              );
-              await qc.invalidateQueries({ queryKey: ["taskParticipants", workspaceId] });
-            }
             // If created directly onto the board, ensure it has at least one placement so it renders.
             if (created.location === "board") {
               const list =
@@ -1045,7 +542,7 @@ export function BoardPage() {
               }
             }
             await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-            closeTaskDrawer();
+            setDrawerOpen(false);
             return;
           }
 
@@ -1058,36 +555,8 @@ export function BoardPage() {
               location: values.location,
               assigneeId: values.assigneeId
             });
-            // Apply watcher diffs on save (Cancel should discard local edits).
-            const prevWatcherIds = new Set(
-              (activeParticipants ?? []).filter((p) => p.role === "watcher").map((p) => p.profileId)
-            );
-            const nextWatcherIds = new Set(values.watcherIds);
-            const toAdd = Array.from(nextWatcherIds).filter((id) => !prevWatcherIds.has(id));
-            const toRemove = Array.from(prevWatcherIds).filter((id) => !nextWatcherIds.has(id));
-            if (toAdd.length || toRemove.length) {
-              await Promise.all([
-                ...toAdd.map((profileId) =>
-                  upsertTaskParticipant({
-                    workspaceId,
-                    taskId: activeTask.id,
-                    profileId,
-                    role: "watcher",
-                    createdBy: session.user.id
-                  })
-                ),
-                ...toRemove.map((profileId) =>
-                  removeTaskParticipant({
-                    workspaceId,
-                    taskId: activeTask.id,
-                    profileId
-                  })
-                )
-              ]);
-              await qc.invalidateQueries({ queryKey: ["taskParticipants", workspaceId] });
-            }
             await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-            closeTaskDrawer();
+            setDrawerOpen(false);
           }
         }}
         onDelete={
@@ -1115,7 +584,7 @@ export function BoardPage() {
                 await deleteTask(activeTask.id);
                 await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
                 setConfirmDeleteOpen(false);
-                closeTaskDrawer();
+                setDrawerOpen(false);
               }}
             >
               Delete
@@ -1125,395 +594,6 @@ export function BoardPage() {
       >
         <div className="text-sm text-slate-700">
           You’re about to delete <span className="font-medium">{activeTask?.title}</span>.
-        </div>
-      </Modal>
-
-      {/* Workspace management */}
-      <Modal
-        open={Boolean(workspaceModal)}
-        title={
-          workspaceModal?.mode === "create"
-            ? "New workspace"
-            : workspaceModal?.mode === "delete"
-              ? "Delete workspace"
-              : "Rename workspace"
-        }
-        onClose={() => setWorkspaceModal(null)}
-        footer={
-          workspaceModal ? (
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="secondary" onClick={() => setWorkspaceModal(null)}>
-                Cancel
-              </Button>
-              {workspaceModal.mode === "delete" ? (
-                <Button
-                  className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
-                  onClick={async () => {
-                    await deleteWorkspace({ id: workspaceModal.id as any });
-                    await qc.invalidateQueries({ queryKey: ["workspaces"] });
-                    // If you deleted the active workspace, go to demo (or first available).
-                    nav("/w/demo/board");
-                    setWorkspaceModal(null);
-                  }}
-                >
-                  Delete
-                </Button>
-              ) : (
-                <Button
-                  onClick={async () => {
-                    const name =
-                      (workspaceModal.mode === "create" ? workspaceNameDraft : workspaceNameDraft || workspaceModal.name)
-                        .trim() || "Workspace";
-                    if (workspaceModal.mode === "create") {
-                      const ws = await createWorkspace({ name });
-                      await qc.invalidateQueries({ queryKey: ["workspaces"] });
-                      nav(`/w/${ws.id}/board`);
-                      setWorkspaceModal(null);
-                      return;
-                    }
-                    const ws = await updateWorkspace({ id: workspaceModal.id as any, name });
-                    await qc.invalidateQueries({ queryKey: ["workspaces"] });
-                    await qc.invalidateQueries({ queryKey: ["workspace", ws.id] });
-                    setWorkspaceModal(null);
-                  }}
-                  disabled={
-                    workspaceModal.mode === "create"
-                      ? !workspaceNameDraft.trim().length
-                      : !(workspaceNameDraft || workspaceModal.name).trim().length
-                  }
-                >
-                  Save
-                </Button>
-              )}
-            </div>
-          ) : null
-        }
-      >
-        {workspaceModal?.mode === "delete" ? (
-          <div className="text-sm text-slate-700">
-            This will delete <span className="font-medium">{workspaceModal.name}</span> and all of its data (groups, lists,
-            tasks, placements).
-          </div>
-        ) : (
-          <div>
-            <div className="text-xs font-medium text-slate-600">Name</div>
-            <Input
-              className="mt-2"
-              autoFocus
-              value={workspaceNameDraft}
-              onChange={(e) => setWorkspaceNameDraft(e.target.value)}
-              placeholder="Workspace name"
-            />
-            {workspaceModal?.mode === "rename" ? (
-              <div className="mt-3 text-xs text-slate-500">
-                Want to delete instead?{" "}
-                <button
-                  className="text-rose-700 hover:underline"
-                  onClick={() =>
-                    setWorkspaceModal({ mode: "delete", id: workspaceModal.id, name: workspaceModal.name })
-                  }
-                >
-                  Delete workspace
-                </button>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </Modal>
-
-      {/* Group management */}
-      <Modal
-        open={Boolean(groupModal)}
-        title={
-          groupModal?.mode === "create" ? "New group" : groupModal?.mode === "delete" ? "Delete group" : "Edit group"
-        }
-        onClose={() => setGroupModal(null)}
-        footer={
-          groupModal ? (
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="secondary" onClick={() => setGroupModal(null)}>
-                Cancel
-              </Button>
-              {groupModal.mode === "delete" ? (
-                <Button
-                  className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
-                  onClick={async () => {
-                    await deleteTaskGroup({ id: groupModal.id });
-                    await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                    setGroupModal(null);
-                  }}
-                >
-                  Delete
-                </Button>
-              ) : (
-                <Button
-                  onClick={async () => {
-                    const title = groupTitleDraft.trim();
-                    const description = groupDescDraft.trim().length ? groupDescDraft.trim() : null;
-                    if (groupModal.mode === "create") {
-                      await createTaskGroup({ workspaceId, title, description });
-                    } else {
-                      await updateTaskGroup({ id: groupModal.id, title, description });
-                    }
-                    await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-                    setGroupModal(null);
-                  }}
-                  disabled={!groupTitleDraft.trim().length}
-                >
-                  Save
-                </Button>
-              )}
-            </div>
-          ) : null
-        }
-      >
-        {groupModal?.mode === "delete" ? (
-          <div className="text-sm text-slate-700">
-            Delete group <span className="font-medium">{groupModal.title}</span>? Lists in this group will be deleted.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div>
-              <div className="text-xs font-medium text-slate-600">Title</div>
-              <Input
-                className="mt-2"
-                autoFocus
-                value={groupTitleDraft}
-                onChange={(e) => setGroupTitleDraft(e.target.value)}
-                placeholder="Group title"
-              />
-            </div>
-            <div>
-              <div className="text-xs font-medium text-slate-600">Description (optional)</div>
-              <Input
-                className="mt-2"
-                value={groupDescDraft}
-                onChange={(e) => setGroupDescDraft(e.target.value)}
-                placeholder="What is this group for?"
-              />
-            </div>
-            {groupModal?.mode === "rename" ? (
-              <div className="mt-1 text-xs text-slate-500">
-                Want to delete instead?{" "}
-                <button
-                  className="text-rose-700 hover:underline"
-                  onClick={() => setGroupModal({ mode: "delete", id: groupModal.id, title: groupModal.title })}
-                >
-                  Delete group
-                </button>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </Modal>
-
-      {/* List management */}
-      <Modal
-        open={Boolean(listModal)}
-        title={
-          listModal?.mode === "create" ? "New list" : listModal?.mode === "delete" ? "Delete list" : "Edit list"
-        }
-        onClose={() => setListModal(null)}
-        footer={
-          listModal ? (
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="secondary" onClick={() => setListModal(null)}>
-                Cancel
-              </Button>
-              {listModal.mode === "delete" ? (
-                <Button
-                  className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
-                  onClick={async () => {
-                    await deleteTaskList({ id: listModal.id });
-                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                    await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
-                    setListModal(null);
-                  }}
-                >
-                  Delete
-                </Button>
-              ) : (
-                <Button
-                  onClick={async () => {
-                    const title = listTitleDraft.trim();
-                    if (listModal.mode === "create") {
-                      await createTaskList({
-                        workspaceId,
-                        groupId: listModal.groupId,
-                        type: listTypeDraft,
-                        title
-                      });
-                    } else {
-                      await updateTaskList({ id: listModal.id, title });
-                    }
-                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                    setListModal(null);
-                  }}
-                  disabled={!listTitleDraft.trim().length}
-                >
-                  Save
-                </Button>
-              )}
-            </div>
-          ) : null
-        }
-      >
-        {listModal?.mode === "delete" ? (
-          <div className="text-sm text-slate-700">
-            Delete list <span className="font-medium">{listModal.title}</span>? Placements in this list will be removed.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div>
-              <div className="text-xs font-medium text-slate-600">Title</div>
-              <Input
-                className="mt-2"
-                autoFocus
-                value={listTitleDraft}
-                onChange={(e) => setListTitleDraft(e.target.value)}
-                placeholder="List title"
-              />
-            </div>
-            {listModal?.mode === "create" ? (
-              <div>
-                <div className="text-xs font-medium text-slate-600">Type</div>
-                <Select className="mt-2" value={listTypeDraft} onChange={(e) => setListTypeDraft(e.target.value as any)}>
-                  <option value="person">Person</option>
-                  <option value="project">Project</option>
-                  <option value="time_slot">Time Slot</option>
-                  <option value="other">Other</option>
-                </Select>
-                <div className="mt-2 text-xs text-slate-500">
-                  (For MVP, type affects icon/behavior only. We’ll wire richer type-specific settings later.)
-                </div>
-              </div>
-            ) : (
-              <div className="mt-1 text-xs text-slate-500">
-                Want to delete instead?{" "}
-                <button
-                  className="text-rose-700 hover:underline"
-                  onClick={() => {
-                    if (!listModal) return;
-                    setListModal({ mode: "delete", id: listModal.id, title: listModal.title });
-                  }}
-                >
-                  Delete list
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
-
-      {/* Unknown @name / (name) during Quick Entry */}
-      <Modal
-        open={Boolean(unknownMemberModal)}
-        title="Add team member?"
-        onClose={() => setUnknownMemberModal(null)}
-        footer={
-          unknownMemberModal ? (
-            <div className="flex items-center justify-between gap-2">
-              <Button
-                variant="ghost"
-                onClick={async () => {
-                  await quickCreateTaskFromEntry({
-                    taskPart: unknownMemberModal.taskPart,
-                    ownerId: null,
-                    watcherIds: [],
-                    titleMode: "raw",
-                    op: unknownMemberModal.op,
-                    listPart: unknownMemberModal.listPart
-                  });
-                  setUnknownMemberModal(null);
-                }}
-              >
-                Treat as plain text
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" onClick={() => setUnknownMemberModal(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  disabled={
-                    !unknownMemberNameDraft.trim().length ||
-                    (unknownMemberSendInvite && unknownMemberEmailDraft.trim().length < 5)
-                  }
-                  onClick={async () => {
-                    if (!unknownMemberModal) return;
-                    const profile = await createMemberPlaceholder({
-                      workspaceId,
-                      name: unknownMemberNameDraft.trim(),
-                      email: unknownMemberEmailDraft.trim().length ? unknownMemberEmailDraft.trim() : null,
-                      status: unknownMemberSendInvite ? "invited" : "active",
-                      role: "member"
-                    });
-                    if (unknownMemberSendInvite && unknownMemberEmailDraft.trim().length) {
-                      await createInvite({
-                        workspaceId,
-                        email: unknownMemberEmailDraft.trim(),
-                        role: "member",
-                        createdBy: session.user.id as any
-                      });
-                    }
-                    await qc.invalidateQueries({ queryKey: ["profiles", workspaceId] });
-                    await quickCreateTaskFromEntry({
-                      taskPart: unknownMemberModal.taskPart,
-                      ownerId: unknownMemberModal.kind === "owner" ? profile.id : unknownMemberModal.ownerId,
-                      watcherIds:
-                        unknownMemberModal.kind === "watcher"
-                          ? [...unknownMemberModal.watcherIds, profile.id]
-                          : unknownMemberModal.watcherIds,
-                      titleMode: "strip",
-                      op: unknownMemberModal.op,
-                      listPart: unknownMemberModal.listPart
-                    });
-                    setUnknownMemberModal(null);
-                  }}
-                >
-                  Create member
-                </Button>
-              </div>
-            </div>
-          ) : null
-        }
-      >
-        <div className="space-y-3 text-sm text-slate-700">
-          <div>
-            We couldn’t find{" "}
-            <span className="font-medium">
-              {unknownMemberModal?.token
-                ? unknownMemberModal.kind === "owner"
-                  ? `@${unknownMemberModal.token}`
-                  : `(${unknownMemberModal.token})`
-                : ""}
-            </span>{" "}
-            in this workspace.
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-600">Name</div>
-            <Input
-              className="mt-2"
-              value={unknownMemberNameDraft}
-              onChange={(e) => setUnknownMemberNameDraft(e.target.value)}
-            />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-600">Email (optional)</div>
-            <Input
-              className="mt-2"
-              value={unknownMemberEmailDraft}
-              onChange={(e) => setUnknownMemberEmailDraft(e.target.value)}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-xs text-slate-700">
-            <input
-              type="checkbox"
-              checked={unknownMemberSendInvite}
-              onChange={(e) => setUnknownMemberSendInvite(e.target.checked)}
-            />
-            Send invite now (requires email)
-          </label>
         </div>
       </Modal>
 

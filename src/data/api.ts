@@ -8,12 +8,9 @@ import type {
   TaskLocation,
   TaskGroup,
   TaskList,
-  TaskListType,
   TaskListId,
   TaskPlacement,
   TaskPlacementId,
-  TaskParticipant,
-  TaskParticipantRole,
   Workspace,
   WorkspaceId,
   WorkspaceMember,
@@ -26,7 +23,6 @@ import {
   demoTaskGroups,
   demoTaskLists,
   demoTaskPlacements,
-  demoTaskParticipants,
   demoTasks,
   demoWorkspace
 } from "./mockDb";
@@ -41,79 +37,19 @@ let tasksDb: Task[] = [...demoTasks];
 let taskGroupsDb: TaskGroup[] = [...demoTaskGroups];
 let taskListsDb: TaskList[] = [...demoTaskLists];
 let taskPlacementsDb: TaskPlacement[] = [...demoTaskPlacements];
-let taskParticipantsDb: TaskParticipant[] = [...demoTaskParticipants];
 let membersDb: WorkspaceMember[] = [...demoMembers];
 let invitesDb: Invite[] = [...demoInvites];
-let workspacesDb: Workspace[] = [demoWorkspace];
-
-export async function listWorkspaces(): Promise<Workspace[]> {
-  await sleep(80);
-  return workspacesDb.slice();
-}
-
-export async function createWorkspace(input: { name: string }): Promise<Workspace> {
-  await sleep(120);
-  const id: WorkspaceId = `w_${Math.random().toString(36).slice(2, 10)}`;
-  const createdBy = profilesDb[0]?.id ?? "demo";
-  const ws: Workspace = { id, name: input.name.trim() || "Workspace", createdBy };
-  workspacesDb = [ws, ...workspacesDb];
-  return ws;
-}
-
-export async function updateWorkspace(input: { id: WorkspaceId; name: string }): Promise<Workspace> {
-  await sleep(120);
-  const idx = workspacesDb.findIndex((w) => w.id === input.id);
-  if (idx < 0) throw new Error("Workspace not found");
-  const prev = workspacesDb[idx]!;
-  const next = { ...prev, name: input.name.trim() || prev.name };
-  workspacesDb = [...workspacesDb.slice(0, idx), next, ...workspacesDb.slice(idx + 1)];
-  return next;
-}
-
-export async function deleteWorkspace(input: { id: WorkspaceId }): Promise<void> {
-  await sleep(120);
-  workspacesDb = workspacesDb.filter((w) => w.id !== input.id);
-  taskGroupsDb = taskGroupsDb.filter((g) => g.workspaceId !== input.id);
-  taskListsDb = taskListsDb.filter((l) => l.workspaceId !== input.id);
-  taskPlacementsDb = taskPlacementsDb.filter((p) => p.workspaceId !== input.id);
-  taskParticipantsDb = taskParticipantsDb.filter((p) => p.workspaceId !== input.id);
-  tasksDb = tasksDb.filter((t) => t.workspaceId !== input.id);
-  membersDb = membersDb.filter((m) => m.workspaceId !== input.id);
-  invitesDb = invitesDb.filter((i) => i.workspaceId !== input.id);
-}
 
 export async function getWorkspace(workspaceId: WorkspaceId): Promise<Workspace> {
   await sleep(80);
-  return workspacesDb.find((w) => w.id === workspaceId) ?? demoWorkspace;
+  if (workspaceId !== demoWorkspace.id) return demoWorkspace;
+  return demoWorkspace;
 }
 
 export async function listProfiles(workspaceId: WorkspaceId): Promise<Profile[]> {
   await sleep(80);
   void workspaceId;
   return profilesDb;
-}
-
-export async function createMemberPlaceholder(input: {
-  workspaceId: WorkspaceId;
-  name: string;
-  email?: string | null;
-  role?: WorkspaceRole;
-  status?: WorkspaceMember["status"];
-}): Promise<Profile> {
-  await sleep(120);
-  const id: ProfileId = `p_${Math.random().toString(36).slice(2, 10)}`;
-  const profile: Profile = { id, name: input.name.trim() || "New member", email: input.email ?? null };
-  profilesDb = [...profilesDb, profile];
-  membersDb = [
-    ...membersDb,
-    {
-      workspaceId: input.workspaceId,
-      profileId: id,
-      role: input.role ?? "member",
-      status: input.status ?? "invited"
-    }
-  ];
-  return profile;
 }
 
 export type WorkspaceMemberRow = {
@@ -147,58 +83,6 @@ export async function listTaskGroups(workspaceId: WorkspaceId): Promise<TaskGrou
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-export async function createTaskGroup(input: {
-  workspaceId: WorkspaceId;
-  title: string;
-  description?: string | null;
-  sortOrder?: number;
-}): Promise<TaskGroup> {
-  await sleep(120);
-  const id: string = `g_${Math.random().toString(36).slice(2, 10)}`;
-  const sortOrder =
-    input.sortOrder ??
-    (taskGroupsDb.filter((g) => g.workspaceId === input.workspaceId).length + 1) * 100;
-  const g: TaskGroup = {
-    id,
-    workspaceId: input.workspaceId,
-    title: input.title.trim() || "Group",
-    description: input.description ?? null,
-    sortOrder
-  };
-  taskGroupsDb = [...taskGroupsDb, g];
-  return g;
-}
-
-export async function updateTaskGroup(input: {
-  id: string;
-  title?: string;
-  description?: string | null;
-  sortOrder?: number;
-}): Promise<TaskGroup> {
-  await sleep(120);
-  const idx = taskGroupsDb.findIndex((g) => g.id === input.id);
-  if (idx < 0) throw new Error("Group not found");
-  const prev = taskGroupsDb[idx]!;
-  const next: TaskGroup = {
-    ...prev,
-    title: input.title !== undefined ? input.title : prev.title,
-    description: input.description !== undefined ? input.description : prev.description,
-    sortOrder: input.sortOrder ?? prev.sortOrder
-  };
-  taskGroupsDb = [...taskGroupsDb.slice(0, idx), next, ...taskGroupsDb.slice(idx + 1)];
-  return next;
-}
-
-export async function deleteTaskGroup(input: { id: string }): Promise<void> {
-  await sleep(120);
-  const group = taskGroupsDb.find((g) => g.id === input.id) ?? null;
-  taskGroupsDb = taskGroupsDb.filter((g) => g.id !== input.id);
-  if (!group) return;
-  const listIds = taskListsDb.filter((l) => l.groupId === group.id).map((l) => l.id);
-  taskListsDb = taskListsDb.filter((l) => l.groupId !== group.id);
-  taskPlacementsDb = taskPlacementsDb.filter((p) => !listIds.includes(p.listId));
-}
-
 export async function listTaskLists(workspaceId: WorkspaceId): Promise<TaskList[]> {
   await sleep(80);
   return taskListsDb
@@ -207,57 +91,6 @@ export async function listTaskLists(workspaceId: WorkspaceId): Promise<TaskList[
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-export async function createTaskList(input: {
-  workspaceId: WorkspaceId;
-  groupId: string | null;
-  type: TaskListType;
-  refId?: string | null;
-  title: string;
-  sortOrder?: number;
-}): Promise<TaskList> {
-  await sleep(120);
-  const id: string = `l_${Math.random().toString(36).slice(2, 10)}`;
-  const sortOrder =
-    input.sortOrder ??
-    (taskListsDb.filter((l) => l.workspaceId === input.workspaceId && l.groupId === input.groupId).length + 1) * 100;
-  const l: TaskList = {
-    id,
-    workspaceId: input.workspaceId,
-    groupId: input.groupId,
-    type: input.type,
-    refId: input.refId ?? null,
-    title: input.title.trim() || "List",
-    sortOrder
-  };
-  taskListsDb = [...taskListsDb, l];
-  return l;
-}
-
-export async function updateTaskList(input: {
-  id: string;
-  groupId?: string | null;
-  title?: string;
-  sortOrder?: number;
-}): Promise<TaskList> {
-  await sleep(120);
-  const idx = taskListsDb.findIndex((l) => l.id === input.id);
-  if (idx < 0) throw new Error("List not found");
-  const prev = taskListsDb[idx]!;
-  const next: TaskList = {
-    ...prev,
-    groupId: input.groupId !== undefined ? input.groupId : prev.groupId,
-    title: input.title !== undefined ? input.title : prev.title,
-    sortOrder: input.sortOrder ?? prev.sortOrder
-  };
-  taskListsDb = [...taskListsDb.slice(0, idx), next, ...taskListsDb.slice(idx + 1)];
-  return next;
-}
-
-export async function deleteTaskList(input: { id: string }): Promise<void> {
-  await sleep(120);
-  taskListsDb = taskListsDb.filter((l) => l.id !== input.id);
-  taskPlacementsDb = taskPlacementsDb.filter((p) => p.listId !== input.id);
-}
 export async function listTaskPlacements(workspaceId: WorkspaceId): Promise<TaskPlacement[]> {
   await sleep(80);
   return taskPlacementsDb.filter((p) => p.workspaceId === workspaceId);
@@ -403,49 +236,6 @@ export async function updateTask(input: UpdateTaskInput): Promise<Task> {
 export async function deleteTask(id: TaskId): Promise<void> {
   await sleep(80);
   tasksDb = tasksDb.filter((t) => t.id !== id);
-  taskParticipantsDb = taskParticipantsDb.filter((p) => p.taskId !== id);
-}
-
-export async function listTaskParticipants(workspaceId: WorkspaceId): Promise<TaskParticipant[]> {
-  await sleep(80);
-  return taskParticipantsDb.filter((p) => p.workspaceId === workspaceId).slice();
-}
-
-export async function upsertTaskParticipant(input: {
-  workspaceId: WorkspaceId;
-  taskId: TaskId;
-  profileId: ProfileId;
-  role: TaskParticipantRole;
-  createdBy: ProfileId;
-}): Promise<TaskParticipant> {
-  await sleep(120);
-  const now = new Date().toISOString();
-  const idx = taskParticipantsDb.findIndex((p) => p.taskId === input.taskId && p.profileId === input.profileId);
-  const row: TaskParticipant = {
-    workspaceId: input.workspaceId,
-    taskId: input.taskId,
-    profileId: input.profileId,
-    role: input.role,
-    createdBy: input.createdBy,
-    createdAt: now
-  };
-  if (idx >= 0) {
-    taskParticipantsDb = [...taskParticipantsDb.slice(0, idx), row, ...taskParticipantsDb.slice(idx + 1)];
-  } else {
-    taskParticipantsDb = [row, ...taskParticipantsDb];
-  }
-  return row;
-}
-
-export async function removeTaskParticipant(input: {
-  workspaceId: WorkspaceId;
-  taskId: TaskId;
-  profileId: ProfileId;
-}): Promise<void> {
-  await sleep(80);
-  taskParticipantsDb = taskParticipantsDb.filter(
-    (p) => !(p.workspaceId === input.workspaceId && p.taskId === input.taskId && p.profileId === input.profileId)
-  );
 }
 
 export type CreateInviteInput = {
@@ -541,7 +331,6 @@ export function __dangerousResetMockDb() {
   taskPlacementsDb = [...demoTaskPlacements];
   membersDb = [...demoMembers];
   invitesDb = [...demoInvites];
-  workspacesDb = [demoWorkspace];
 }
 
 

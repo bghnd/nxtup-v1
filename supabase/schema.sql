@@ -171,29 +171,6 @@ create index if not exists task_placements_workspace_id_idx on public.task_place
 create index if not exists task_placements_list_id_position_idx on public.task_placements(list_id, position);
 create index if not exists task_placements_task_id_idx on public.task_placements(task_id);
 
--- =========================
--- Task participants (watchers / trackers)
--- =========================
-do $$ begin
-  create type public.task_participant_role as enum ('watcher', 'tracker');
-exception
-  when duplicate_object then null;
-end $$;
-
-create table if not exists public.task_participants (
-  workspace_id uuid not null references public.workspaces(id) on delete cascade,
-  task_id uuid not null references public.tasks(id) on delete cascade,
-  profile_id uuid not null references public.profiles(id) on delete cascade,
-  role public.task_participant_role not null default 'watcher',
-  created_by uuid not null references public.profiles(id) on delete restrict,
-  created_at timestamptz not null default now(),
-  primary key (task_id, profile_id)
-);
-
-create index if not exists task_participants_workspace_id_idx on public.task_participants(workspace_id);
-create index if not exists task_participants_task_id_idx on public.task_participants(task_id);
-create index if not exists task_participants_profile_id_idx on public.task_participants(profile_id);
-
 -- Task <-> tags
 create table if not exists public.task_tags (
   task_id uuid not null references public.tasks(id) on delete cascade,
@@ -234,8 +211,6 @@ create or replace function public.is_workspace_member(wid uuid)
 returns boolean
 language sql
 stable
-security definer
-set search_path = public
 as $$
   select exists(
     select 1
@@ -246,9 +221,6 @@ as $$
   );
 $$;
 
--- Allow authenticated users to call the helper.
-grant execute on function public.is_workspace_member(uuid) to authenticated;
-
 alter table public.workspaces enable row level security;
 alter table public.workspace_members enable row level security;
 alter table public.invites enable row level security;
@@ -256,7 +228,6 @@ alter table public.tasks enable row level security;
 alter table public.task_groups enable row level security;
 alter table public.task_lists enable row level security;
 alter table public.task_placements enable row level security;
-alter table public.task_participants enable row level security;
 
 -- Workspaces: members can read; any authenticated user can create a workspace.
 drop policy if exists "workspaces_select_member" on public.workspaces;
@@ -266,36 +237,12 @@ for select
 to authenticated
 using (public.is_workspace_member(id));
 
--- Allow the workspace creator to read their own workspace.
--- This avoids a circular dependency when inserting the creator’s first workspace_members row.
-drop policy if exists "workspaces_select_creator" on public.workspaces;
-create policy "workspaces_select_creator"
-on public.workspaces
-for select
-to authenticated
-using (created_by = auth.uid());
-
 drop policy if exists "workspaces_insert_authenticated" on public.workspaces;
 create policy "workspaces_insert_authenticated"
 on public.workspaces
 for insert
 to authenticated
 with check (created_by = auth.uid());
-
-drop policy if exists "workspaces_update_creator" on public.workspaces;
-create policy "workspaces_update_creator"
-on public.workspaces
-for update
-to authenticated
-using (created_by = auth.uid())
-with check (created_by = auth.uid());
-
-drop policy if exists "workspaces_delete_creator" on public.workspaces;
-create policy "workspaces_delete_creator"
-on public.workspaces
-for delete
-to authenticated
-using (created_by = auth.uid());
 
 -- Members: members can read membership; only the workspace creator can manage membership (MVP baseline).
 drop policy if exists "workspace_members_select_member" on public.workspace_members;
@@ -350,14 +297,6 @@ with check (public.is_workspace_member(workspace_id));
 drop policy if exists "task_placements_crud_member" on public.task_placements;
 create policy "task_placements_crud_member"
 on public.task_placements
-for all
-to authenticated
-using (public.is_workspace_member(workspace_id))
-with check (public.is_workspace_member(workspace_id));
-
-drop policy if exists "task_participants_crud_member" on public.task_participants;
-create policy "task_participants_crud_member"
-on public.task_participants
 for all
 to authenticated
 using (public.is_workspace_member(workspace_id))

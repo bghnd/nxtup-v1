@@ -2,8 +2,14 @@ import type { DataAdapter } from "./types";
 import { mockAdapter } from "./mockAdapter";
 import { supabaseAdapter } from "./supabaseAdapter";
 
-// Start in mock mode; optional Supabase auth can switch this at runtime.
-let adapter: DataAdapter = mockAdapter;
+function pickAdapter(): DataAdapter {
+  const useSupabase = (import.meta.env.VITE_USE_SUPABASE as string | undefined) === "1";
+  const hasEnv = Boolean(import.meta.env.VITE_SUPABASE_URL) && Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
+  if (useSupabase && hasEnv) return supabaseAdapter;
+  return mockAdapter;
+}
+
+let adapter: DataAdapter = pickAdapter();
 
 export function getDataAdapter(): DataAdapter {
   return adapter;
@@ -11,18 +17,6 @@ export function getDataAdapter(): DataAdapter {
 
 export function setDataAdapter(next: DataAdapter) {
   adapter = next;
-}
-
-export function useMockAdapter() {
-  adapter = mockAdapter;
-}
-
-export function useSupabaseAdapter() {
-  adapter = supabaseAdapter;
-}
-
-export function getAdapterKind(): "mock" | "supabase" {
-  return adapter === supabaseAdapter ? "supabase" : "mock";
 }
 
 
