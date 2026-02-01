@@ -1,21 +1,28 @@
 import React from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
-import { Bell, Inbox, LayoutDashboard, LogOut, Settings, Trello, Users, Search } from "lucide-react";
+import { Bell, Inbox, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Settings, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "../lib/cn";
 import { Avatar } from "../components/Avatar";
-import { Input } from "../components/Input";
 import { Button } from "../components/Button";
+import { InlineEditableText } from "../components/InlineEditableText";
+import { SupabaseAuthModal } from "../components/SupabaseAuthModal";
 import { useStubSession } from "../../auth/stubAuth";
+import { consumeSupabaseRedirectFromUrl, getSupabaseSession, onSupabaseAuthChange } from "../../auth/supabaseAuth";
+import { ensureSupabaseDemoWorkspace, getLastSupabaseWorkspaceId } from "../../auth/supabaseBootstrap";
 import {
+  createWorkspace,
   createTaskPlacement,
   deleteTaskPlacementByTaskAndList,
+  listWorkspaces,
   listTaskLists,
   listTasks,
+  updateWorkspace,
   updateTask
 } from "../../data/client";
+import { getAdapterKind, useMockAdapter, useSupabaseAdapter } from "../../data/adapter";
 import { ContextPanel, type PanelType } from "./contextPanel/ContextPanel";
 import { InboxPanel } from "./contextPanel/InboxPanel";
 import { loadDisplayPrefs } from "../state/displayPrefs";
@@ -37,6 +44,9 @@ export function AppLayout() {
   const { session, setUser, setWorkspaceRole, allUsers } = useStubSession();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const [authOpen, setAuthOpen] = React.useState(false);
+  const [supabaseEmail, setSupabaseEmail] = React.useState<string | null>(null);
+  const [adapterKind, setAdapterKind] = React.useState<"mock" | "supabase">(() => getAdapterKind());
   const inboxHoverTimer = React.useRef<number | null>(null);
   const [inboxDropActive, setInboxDropActive] = React.useState(false);
   const inboxDragDepth = React.useRef(0);
@@ -54,8 +64,12 @@ export function AppLayout() {
     try {
       const pinned = localStorage.getItem(PANEL_PINNED_KEY) === "1";
       if (!pinned) return null;
-      const last = localStorage.getItem(PANEL_LAST_KEY) as PanelType | null;
-      return last ?? null;
+      const last = localStorage.getItem(PANEL_LAST_KEY) as string | null;
+      if (last === "inbox" || last === "onlyme" || last === "raw") return last;
+      // Back-compat for older saved panel ids.
+      if (last === "activity") return "onlyme";
+      if (last === "saved") return "raw";
+      return "inbox";
     } catch {
       return null;
     }
@@ -106,6 +120,11 @@ export function AppLayout() {
 
   // While any context panel is open, L1 must be rail-collapsed (icon-only).
   const effectiveSidebarCollapsed = panel ? true : sidebarCollapsed;
+  const collapseButtonLabel = panel
+    ? "Close panel and expand sidebar"
+    : effectiveSidebarCollapsed
+      ? "Expand sidebar"
+      : "Collapse sidebar";
 
   React.useEffect(() => {
     try {
@@ -134,11 +153,61 @@ export function AppLayout() {
     queryKey: ["taskLists", workspaceId ?? "demo"],
     queryFn: () => listTaskLists(workspaceId ?? "demo")
   });
+  const workspacesQ = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => listWorkspaces()
+  });
   const allTasks = tasksQ.data ?? [];
   const inboxTasks = allTasks.filter((t) => t.location === "inbox");
   const inboxCount = inboxTasks.length;
   const displayPrefs = React.useMemo(() => loadDisplayPrefs(), []);
   const inboxListId = (listsQ.data ?? []).find((l) => l.type === "inbox")?.id ?? null;
+  const workspaces = workspacesQ.data ?? [];
+
+  const [createWsOpen, setCreateWsOpen] = React.useState(false);
+  const [createWsName, setCreateWsName] = React.useState("");
+
+  React.useEffect(() => {
+    const useSupabase = (import.meta.env.VITE_USE_SUPABASE as string | undefined) === "1";
+    if (!useSupabase) return;
+
+    let alive = true;
+    async function refresh() {
+      // If we just returned from a magic-link redirect, exchange ?code=... for a real session.
+      await consumeSupabaseRedirectFromUrl();
+
+      const s = await getSupabaseSession();
+      const email = s.data.session?.user?.email ?? null;
+      if (!alive) return;
+      setSupabaseEmail(email);
+
+      if (email) {
+        useSupabaseAdapter();
+        setAdapterKind(getAdapterKind());
+        // Ensure there's a workspace to land in.
+        const wsId = await ensureSupabaseDemoWorkspace();
+        if (!alive) return;
+        // If we're still on /w/demo/*, redirect to the real workspace.
+        if (!workspaceId || workspaceId === "demo") {
+          nav(`/w/${wsId}/board`, { replace: true });
+        }
+      } else {
+        useMockAdapter();
+        setAdapterKind(getAdapterKind());
+        // If we have a remembered workspace and we are on demo, leave the user in demo (mock) mode.
+        void getLastSupabaseWorkspaceId();
+      }
+
+      await qc.invalidateQueries();
+    }
+
+    void refresh();
+    const unsub = onSupabaseAuthChange(() => void refresh());
+    return () => {
+      alive = false;
+      unsub();
+    };
+  }, [nav, qc, workspaceId]);
 
   return (
     <div className="h-screen overflow-hidden bg-slate-50">
@@ -152,20 +221,31 @@ export function AppLayout() {
             NXTUP
           </div>
 
-          <div className="ml-4 hidden w-[460px] md:block">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <Input className="pl-9" placeholder="Search tasks or assignees..." />
-            </div>
-          </div>
-
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" aria-label="Search (mobile)" className="md:hidden">
-              <Search size={18} />
-            </Button>
             <Button variant="ghost" size="sm" aria-label="Notifications">
               <Bell size={18} />
             </Button>
+            <div
+              className={cn(
+                "hidden md:flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+                adapterKind === "supabase"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 bg-slate-50 text-slate-700"
+              )}
+              title="Active backend for reads/writes"
+            >
+              Backend: {adapterKind === "supabase" ? "Supabase" : "Mock"}
+            </div>
+            {(import.meta.env.VITE_USE_SUPABASE as string | undefined) === "1" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAuthOpen(true)}
+                title={supabaseEmail ? "Supabase auth: signed in" : "Supabase auth: sign in"}
+              >
+                {supabaseEmail ? "Supabase ✓" : "Sign in"}
+              </Button>
+            ) : null}
             <div className="flex items-center gap-2">
               <select
                 className="hidden h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 md:block"
@@ -173,6 +253,7 @@ export function AppLayout() {
                 onChange={(e) => setUser(e.target.value)}
                 aria-label="Switch user (stub)"
                 title="Stub auth: switch active user"
+                disabled={Boolean(supabaseEmail)}
               >
                 {allUsers.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -186,16 +267,26 @@ export function AppLayout() {
                 onChange={(e) => setWorkspaceRole(e.target.value as any)}
                 aria-label="Switch role (stub)"
                 title="Stub auth: switch workspace role"
+                disabled={Boolean(supabaseEmail)}
               >
                 <option value="owner">Owner</option>
                 <option value="admin">Admin</option>
                 <option value="member">Member</option>
               </select>
-              <Avatar name={session.user.name} />
+              <Avatar name={supabaseEmail ?? session.user.name} />
             </div>
           </div>
         </div>
       </header>
+
+      <SupabaseAuthModal
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        onAuthed={(wsId) => {
+          // After verification + bootstrap, we can navigate to the real workspace.
+          nav(`/w/${wsId}/board`, { replace: true });
+        }}
+      />
 
       {/* App chrome row: rail + (optional) context panel + main content.
           Only the main content should scroll; nav layers should not. */}
@@ -203,33 +294,35 @@ export function AppLayout() {
         {/* Sidebar */}
         <aside
           className={cn(
-            "h-full shrink-0 border-r border-slate-200 bg-white overflow-y-auto",
+            "h-full shrink-0 border-r border-slate-200 bg-white overflow-hidden flex flex-col",
             effectiveSidebarCollapsed ? "w-[76px] px-2" : "w-[240px] px-3"
           )}
         >
-          <div className={cn("flex items-center justify-between", effectiveSidebarCollapsed ? "px-1 py-3" : "px-2 py-3")}>
-            {!effectiveSidebarCollapsed ? (
-              <div className="text-xs font-medium text-slate-500">Team Board</div>
-            ) : (
-              <div className="sr-only">Team Board</div>
-            )}
+          <div className={cn("flex items-center px-1 py-3", effectiveSidebarCollapsed ? "justify-center" : "justify-end")}>
             <Button
               variant="ghost"
               size="sm"
-              aria-label={effectiveSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={effectiveSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapseButtonLabel}
+              title={collapseButtonLabel}
               onClick={() => {
                 setCollapseMode("manual");
+                // If L2 panel is open, it forces L1 into rail-collapsed.
+                // Clicking the control should close L2 and expand L1 in one step.
+                if (panel) {
+                  setPanel(null);
+                  setSidebarCollapsed(false);
+                  return;
+                }
                 setSidebarCollapsed((v) => !v);
               }}
-              disabled={Boolean(panel)}
               className={cn(effectiveSidebarCollapsed ? "h-8 w-8 px-0" : "h-8")}
             >
-              {effectiveSidebarCollapsed ? "»" : "«"}
+              {effectiveSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </Button>
           </div>
 
-          <nav className="mt-1 space-y-1">
+          <div className="flex-1 overflow-y-auto pb-3">
+            <nav className="mt-1 space-y-1">
             <button
               className={cn(
                 navItem,
@@ -267,38 +360,44 @@ export function AppLayout() {
                 }
               }}
               onDrop={async (e) => {
+                e.preventDefault();
                 const taskId = e.dataTransfer.getData("text/plain");
                 if (!taskId) return;
                 inboxDragDepth.current = 0;
                 setInboxDropActive(false);
                 if (inboxHoverTimer.current) window.clearTimeout(inboxHoverTimer.current);
                 inboxHoverTimer.current = null;
-                // Default: clear assignee when moving to inbox. Hold ⌥ to keep assignee.
-                await updateTask({
-                  id: taskId,
-                  location: "inbox",
-                  assigneeId: e.altKey ? undefined : null
-                });
-                // Maintain placements: move into the inbox list, and remove source placement unless ⌥ is held.
-                if (inboxListId) {
-                  const raw = e.dataTransfer.getData("application/x-nxtup-task");
-                  const payload = raw ? (JSON.parse(raw) as { taskId: string; fromListId?: string | null }) : null;
-                  if (!e.altKey && payload?.fromListId && payload.fromListId !== inboxListId) {
-                    await deleteTaskPlacementByTaskAndList({
+                try {
+                  // Default: clear assignee when moving to inbox. Hold ⌥ to keep assignee.
+                  await updateTask({
+                    id: taskId,
+                    location: "inbox",
+                    assigneeId: e.altKey ? undefined : null
+                  });
+                  // Maintain placements: move into the inbox list, and remove source placement unless ⌥ is held.
+                  if (inboxListId) {
+                    const raw = e.dataTransfer.getData("application/x-nxtup-task");
+                    const payload = raw ? (JSON.parse(raw) as { taskId: string; fromListId?: string | null }) : null;
+                    if (!e.altKey && payload?.fromListId && payload.fromListId !== inboxListId) {
+                      await deleteTaskPlacementByTaskAndList({
+                        workspaceId: workspaceId ?? "demo",
+                        taskId,
+                        listId: payload.fromListId
+                      });
+                    }
+                    await createTaskPlacement({
                       workspaceId: workspaceId ?? "demo",
                       taskId,
-                      listId: payload.fromListId
+                      listId: inboxListId,
+                      createdBy: session.user.id
                     });
+                    await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId ?? "demo"] });
                   }
-                  await createTaskPlacement({
-                    workspaceId: workspaceId ?? "demo",
-                    taskId,
-                    listId: inboxListId,
-                    createdBy: session.user.id
-                  });
-                  await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId ?? "demo"] });
+                  await qc.invalidateQueries({ queryKey: ["tasks", workspaceId ?? "demo"] });
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.error("[DnD] drop to inbox failed", err);
                 }
-                await qc.invalidateQueries({ queryKey: ["tasks", workspaceId ?? "demo"] });
                 // Do not auto-open the Inbox drawer on drop; long-hover is the deliberate open gesture.
               }}
             >
@@ -315,16 +414,6 @@ export function AppLayout() {
               )}
             </button>
             <NavLink
-              to={`${base}/board`}
-              className={({ isActive }) =>
-                cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
-              }
-              title={effectiveSidebarCollapsed ? "Team Board" : undefined}
-            >
-              <Trello size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? <span>Team Board</span> : <span className="sr-only">Team Board</span>}
-            </NavLink>
-            <NavLink
               to={`${base}/dashboard`}
               className={({ isActive }) =>
                 cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
@@ -334,47 +423,139 @@ export function AppLayout() {
               <LayoutDashboard size={18} className="text-slate-500" />
               {!effectiveSidebarCollapsed ? <span>My Dashboard</span> : <span className="sr-only">My Dashboard</span>}
             </NavLink>
-          </nav>
+            </nav>
 
-          <div className={cn("mt-6", sidebarCollapsed ? "px-1 py-2" : "px-2 py-2")}>
-            {!sidebarCollapsed ? (
-              <div className="text-xs font-medium text-slate-500">Workspace</div>
-            ) : (
-              <div className="sr-only">Workspace</div>
-            )}
+            <div className={cn("mt-6", effectiveSidebarCollapsed ? "px-1 py-2" : "px-2 py-2")}>
+              {!effectiveSidebarCollapsed ? (
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-slate-500">Workspaces</div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Start new workspace"
+                    title="Start new workspace"
+                    className="h-7 w-7 px-0"
+                    onClick={() => {
+                      setCreateWsOpen((v) => !v);
+                      setCreateWsName("");
+                    }}
+                  >
+                    <Plus size={16} className="text-slate-600" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="sr-only">Workspaces</div>
+              )}
+            </div>
+
+            {createWsOpen && !effectiveSidebarCollapsed ? (
+              <div className="px-2">
+                <input
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="Workspace name…"
+                  value={createWsName}
+                  onChange={(e) => setCreateWsName(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setCreateWsOpen(false);
+                      setCreateWsName("");
+                      return;
+                    }
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const name = createWsName.trim();
+                    if (!name.length) return;
+                    const ws = await createWorkspace({ name });
+                    await qc.invalidateQueries({ queryKey: ["workspaces"] });
+                    setCreateWsOpen(false);
+                    setCreateWsName("");
+                    nav(`/w/${ws.id}/board`);
+                  }}
+                />
+                <div className="mt-1 text-[11px] text-slate-500">Enter to create • Esc to cancel</div>
+              </div>
+            ) : null}
+
+            <nav className="mt-2 space-y-1">
+              {workspaces.map((w) => {
+                const active = (workspaceId ?? "demo") === w.id;
+                return (
+                  <button
+                    key={w.id}
+                    className={cn(
+                      navItem,
+                      effectiveSidebarCollapsed && "justify-center px-2",
+                      active && navItemActive,
+                      "w-full text-left"
+                    )}
+                    onClick={() => nav(`/w/${w.id}/board`)}
+                    title={effectiveSidebarCollapsed ? w.name : undefined}
+                  >
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                      {(w.name?.trim()?.[0] ?? "W").toUpperCase()}
+                    </div>
+                    {!effectiveSidebarCollapsed ? (
+                      <InlineEditableText
+                        value={w.name}
+                        ariaLabel={`Rename workspace ${w.name}`}
+                        className="text-sm font-medium text-slate-800"
+                        onConfirm={async (next) => {
+                          await updateWorkspace({ id: w.id, name: next });
+                          await qc.invalidateQueries({ queryKey: ["workspaces"] });
+                        }}
+                      />
+                    ) : (
+                      <span className="sr-only">{w.name}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
-          <nav className="mt-1 space-y-1">
-            <NavLink
-              to={`${base}/settings/members`}
-              className={({ isActive }) =>
-                cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
-              }
-              title={effectiveSidebarCollapsed ? "Members" : undefined}
-            >
-              <Users size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? <span>Members</span> : <span className="sr-only">Members</span>}
-            </NavLink>
-            <NavLink
-              to={`${base}/settings/general`}
-              className={({ isActive }) =>
-                cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
-              }
-              title={effectiveSidebarCollapsed ? "Settings" : undefined}
-            >
-              <Settings size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? <span>Settings</span> : <span className="sr-only">Settings</span>}
-            </NavLink>
-          </nav>
 
-          <div className="mt-6 border-t border-slate-100 pt-3" />
+          {/* Bottom settings group */}
+          <div className={cn("border-t border-slate-100 pt-3", effectiveSidebarCollapsed ? "pb-3" : "pb-4")}>
+            {!effectiveSidebarCollapsed ? (
+              <div className="px-2 pb-2 text-xs font-medium text-slate-500">Settings</div>
+            ) : (
+              <div className="sr-only">Settings</div>
+            )}
+            <nav className="space-y-1">
+              <NavLink
+                to={`${base}/settings/members`}
+                className={({ isActive }) =>
+                  cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
+                }
+                title={effectiveSidebarCollapsed ? "Members" : undefined}
+              >
+                <Users size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? <span>Members</span> : <span className="sr-only">Members</span>}
+              </NavLink>
+              <NavLink
+                to={`${base}/settings/general`}
+                className={({ isActive }) =>
+                  cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
+                }
+                title={effectiveSidebarCollapsed ? "Settings" : undefined}
+              >
+                <Settings size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? <span>Settings</span> : <span className="sr-only">Settings</span>}
+              </NavLink>
 
-          <button
-            className={cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", "w-full")}
-            title={effectiveSidebarCollapsed ? "Logout" : undefined}
-          >
-            <LogOut size={18} className="text-slate-500" />
-            {!effectiveSidebarCollapsed ? <span>Logout</span> : <span className="sr-only">Logout</span>}
-          </button>
+              <button
+                className={cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", "w-full text-left")}
+                title={effectiveSidebarCollapsed ? "Logout" : undefined}
+                onClick={() => {
+                  // Stub logout placeholder (real logout lives in Supabase modal today).
+                  setAuthOpen(true);
+                }}
+              >
+                <LogOut size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? <span>Logout</span> : <span className="sr-only">Logout</span>}
+              </button>
+            </nav>
+          </div>
         </aside>
 
         {panel ? (
@@ -392,6 +573,7 @@ export function AppLayout() {
                 count={inboxCount}
                 tasks={inboxTasks}
                 display={displayPrefs}
+                inboxListId={inboxListId}
                 onOpenTask={(taskId) => {
                   // Open the task drawer by navigating to the board with a task query param.
                   nav(`${base}/board?task=${encodeURIComponent(taskId)}`);
@@ -405,6 +587,20 @@ export function AppLayout() {
                   await qc.invalidateQueries({ queryKey: ["tasks", workspaceId ?? "demo"] });
                 }}
               />
+            ) : panel === "onlyme" ? (
+              <div className="p-4">
+                <div className="text-sm font-semibold text-slate-900">OnlyMe</div>
+                <div className="mt-2 text-sm text-slate-600">
+                  Placeholder tab for a future phase: a personal view of tasks relevant only to the current user.
+                </div>
+              </div>
+            ) : panel === "raw" ? (
+              <div className="p-4">
+                <div className="text-sm font-semibold text-slate-900">Raw Mode</div>
+                <div className="mt-2 text-sm text-slate-600">
+                  Placeholder tab for a future phase: low-level/raw task stream and debugging views.
+                </div>
+              </div>
             ) : (
               <div className="p-4 text-sm text-slate-500">
                 This panel is a placeholder for a future phase.
