@@ -331,6 +331,246 @@ export function __dangerousResetMockDb() {
   taskPlacementsDb = [...demoTaskPlacements];
   membersDb = [...demoMembers];
   invitesDb = [...demoInvites];
+  workspacesDb = [{ ...demoWorkspace }];
+  taskParticipantsDb = [];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workspaces
+// ─────────────────────────────────────────────────────────────────────────────
+
+let workspacesDb: Workspace[] = [{ ...demoWorkspace }];
+
+export async function listWorkspaces(): Promise<Workspace[]> {
+  await sleep(80);
+  return workspacesDb;
+}
+
+export async function createWorkspace(input: { name: string }): Promise<Workspace> {
+  await sleep(120);
+  const id = `ws_${Math.random().toString(36).slice(2, 10)}`;
+  const ws: Workspace = {
+    id,
+    name: input.name.trim() || "Untitled Workspace",
+    createdBy: "p_alice" // Mock: default to Alice
+  };
+  workspacesDb = [...workspacesDb, ws];
+  return ws;
+}
+
+export async function updateWorkspace(input: {
+  id: WorkspaceId;
+  name?: string;
+  description?: string | null;
+}): Promise<Workspace> {
+  await sleep(100);
+  const idx = workspacesDb.findIndex((w) => w.id === input.id);
+  if (idx < 0) throw new Error("Workspace not found");
+  const prev = workspacesDb[idx]!;
+  const next: Workspace = {
+    ...prev,
+    name: input.name !== undefined ? input.name : prev.name,
+    description: input.description !== undefined ? input.description : prev.description
+  };
+  workspacesDb = [...workspacesDb.slice(0, idx), next, ...workspacesDb.slice(idx + 1)];
+  return next;
+}
+
+export async function deleteWorkspace(id: WorkspaceId): Promise<void> {
+  await sleep(100);
+  workspacesDb = workspacesDb.filter((w) => w.id !== id);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task Groups
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function createTaskGroup(input: {
+  workspaceId: WorkspaceId;
+  title: string;
+  description?: string | null;
+}): Promise<TaskGroup> {
+  await sleep(100);
+  const id = `g_${Math.random().toString(36).slice(2, 10)}`;
+  const maxSort = Math.max(0, ...taskGroupsDb.map((g) => g.sortOrder));
+  const group: TaskGroup = {
+    id,
+    workspaceId: input.workspaceId,
+    title: input.title.trim() || "Untitled Group",
+    description: input.description ?? null,
+    sortOrder: maxSort + 100
+  };
+  taskGroupsDb = [...taskGroupsDb, group];
+  return group;
+}
+
+export async function updateTaskGroup(input: {
+  id: string;
+  title?: string;
+  description?: string | null;
+}): Promise<TaskGroup> {
+  await sleep(100);
+  const idx = taskGroupsDb.findIndex((g) => g.id === input.id);
+  if (idx < 0) throw new Error("TaskGroup not found");
+  const prev = taskGroupsDb[idx]!;
+  const next: TaskGroup = {
+    ...prev,
+    title: input.title !== undefined ? input.title : prev.title,
+    description: input.description !== undefined ? input.description : prev.description
+  };
+  taskGroupsDb = [...taskGroupsDb.slice(0, idx), next, ...taskGroupsDb.slice(idx + 1)];
+  return next;
+}
+
+export async function deleteTaskGroup(id: string): Promise<void> {
+  await sleep(80);
+  taskGroupsDb = taskGroupsDb.filter((g) => g.id !== id);
+  // Also orphan any lists that belonged to this group
+  taskListsDb = taskListsDb.map((l) => (l.groupId === id ? { ...l, groupId: null } : l));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task Lists
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function createTaskList(input: {
+  workspaceId: WorkspaceId;
+  groupId: string | null;
+  type: TaskList["type"];
+  title: string;
+  refId?: string | null;
+}): Promise<TaskList> {
+  await sleep(100);
+  const id = `l_${Math.random().toString(36).slice(2, 10)}`;
+  const maxSort = Math.max(0, ...taskListsDb.map((l) => l.sortOrder));
+  const list: TaskList = {
+    id,
+    workspaceId: input.workspaceId,
+    groupId: input.groupId,
+    type: input.type,
+    refId: input.refId ?? null,
+    title: input.title.trim() || "Untitled List",
+    sortOrder: maxSort + 100
+  };
+  taskListsDb = [...taskListsDb, list];
+  return list;
+}
+
+export async function updateTaskList(input: {
+  id: string;
+  title?: string;
+  groupId?: string | null;
+}): Promise<TaskList> {
+  await sleep(100);
+  const idx = taskListsDb.findIndex((l) => l.id === input.id);
+  if (idx < 0) throw new Error("TaskList not found");
+  const prev = taskListsDb[idx]!;
+  const next: TaskList = {
+    ...prev,
+    title: input.title !== undefined ? input.title : prev.title,
+    groupId: input.groupId !== undefined ? input.groupId : prev.groupId
+  };
+  taskListsDb = [...taskListsDb.slice(0, idx), next, ...taskListsDb.slice(idx + 1)];
+  return next;
+}
+
+export async function deleteTaskList(id: string): Promise<void> {
+  await sleep(80);
+  taskListsDb = taskListsDb.filter((l) => l.id !== id);
+  // Also remove placements pointing to this list
+  taskPlacementsDb = taskPlacementsDb.filter((p) => p.listId !== id);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task Participants
+// ─────────────────────────────────────────────────────────────────────────────
+
+import type { TaskParticipant, TaskParticipantRole } from "../domain/types";
+
+let taskParticipantsDb: TaskParticipant[] = [];
+
+export async function listTaskParticipants(workspaceId: WorkspaceId): Promise<TaskParticipant[]> {
+  await sleep(80);
+  return taskParticipantsDb.filter((p) => p.workspaceId === workspaceId);
+}
+
+export async function upsertTaskParticipant(input: {
+  workspaceId: WorkspaceId;
+  taskId: string;
+  profileId: string;
+  role: TaskParticipantRole;
+  createdBy: string;
+}): Promise<TaskParticipant> {
+  await sleep(90);
+  const existingIdx = taskParticipantsDb.findIndex(
+    (p) => p.workspaceId === input.workspaceId && p.taskId === input.taskId && p.profileId === input.profileId
+  );
+  if (existingIdx >= 0) {
+    // Update role
+    const prev = taskParticipantsDb[existingIdx]!;
+    const next: TaskParticipant = { ...prev, role: input.role };
+    taskParticipantsDb = [
+      ...taskParticipantsDb.slice(0, existingIdx),
+      next,
+      ...taskParticipantsDb.slice(existingIdx + 1)
+    ];
+    return next;
+  }
+  const id = `tp_${Math.random().toString(36).slice(2, 10)}`;
+  const participant: TaskParticipant = {
+    id,
+    workspaceId: input.workspaceId,
+    taskId: input.taskId,
+    profileId: input.profileId,
+    role: input.role,
+    createdBy: input.createdBy,
+    createdAt: new Date().toISOString()
+  };
+  taskParticipantsDb = [...taskParticipantsDb, participant];
+  return participant;
+}
+
+export async function removeTaskParticipant(input: {
+  workspaceId: WorkspaceId;
+  taskId: string;
+  profileId: string;
+}): Promise<void> {
+  await sleep(80);
+  taskParticipantsDb = taskParticipantsDb.filter(
+    (p) => !(p.workspaceId === input.workspaceId && p.taskId === input.taskId && p.profileId === input.profileId)
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Member Placeholder (for inviting unknown users via quick entry)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function createMemberPlaceholder(input: {
+  workspaceId: WorkspaceId;
+  name: string;
+  email?: string;
+}): Promise<Profile> {
+  await sleep(120);
+  const id = `p_${Math.random().toString(36).slice(2, 10)}`;
+  const profile: Profile = {
+    id,
+    name: input.name.trim() || "Unknown",
+    email: input.email?.trim() || `placeholder-${id}@nxtup.dev`,
+    avatarUrl: null
+  };
+  profilesDb = [...profilesDb, profile];
+  // Also add as member
+  membersDb = [
+    ...membersDb,
+    {
+      workspaceId: input.workspaceId,
+      profileId: id,
+      role: "member",
+      status: "invited"
+    }
+  ];
+  return profile;
+}
+
 
 

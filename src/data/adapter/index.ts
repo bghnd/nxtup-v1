@@ -10,6 +10,7 @@ function pickAdapter(): DataAdapter {
 }
 
 let adapter: DataAdapter = pickAdapter();
+let adapterKind: "mock" | "supabase" = adapter === supabaseAdapter ? "supabase" : "mock";
 
 export function getDataAdapter(): DataAdapter {
   return adapter;
@@ -18,6 +19,21 @@ export function getDataAdapter(): DataAdapter {
 export function setDataAdapter(next: DataAdapter) {
   adapter = next;
 }
+
+export function getAdapterKind(): "mock" | "supabase" {
+  return adapterKind;
+}
+
+export function useMockAdapter() {
+  adapter = mockAdapter;
+  adapterKind = "mock";
+}
+
+export function useSupabaseAdapter() {
+  adapter = supabaseAdapter;
+  adapterKind = "supabase";
+}
+
 
 
 

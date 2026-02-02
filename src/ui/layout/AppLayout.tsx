@@ -184,12 +184,19 @@ export function AppLayout() {
       if (email) {
         useSupabaseAdapter();
         setAdapterKind(getAdapterKind());
+
         // Ensure there's a workspace to land in.
-        const wsId = await ensureSupabaseDemoWorkspace();
-        if (!alive) return;
-        // If we're still on /w/demo/*, redirect to the real workspace.
-        if (!workspaceId || workspaceId === "demo") {
-          nav(`/w/${wsId}/board`, { replace: true });
+        // If this fails (e.g., RLS error), stay in Supabase mode but don't navigate.
+        try {
+          const wsId = await ensureSupabaseDemoWorkspace();
+          if (!alive) return;
+          // If we're still on /w/demo/*, redirect to the real workspace.
+          if (!workspaceId || workspaceId === "demo") {
+            nav(`/w/${wsId}/board`, { replace: true });
+          }
+        } catch (err) {
+          console.error("Failed to ensure workspace:", err);
+          // Stay in Supabase mode but don't navigate away from current page
         }
       } else {
         useMockAdapter();
@@ -323,106 +330,106 @@ export function AppLayout() {
 
           <div className="flex-1 overflow-y-auto pb-3">
             <nav className="mt-1 space-y-1">
-            <button
-              className={cn(
-                navItem,
-                effectiveSidebarCollapsed && "justify-center px-2",
-                panel === "inbox" && navItemActive,
-                inboxDropActive && "ring-2 ring-blue-500/20 ring-inset bg-blue-50/40",
-                "w-full text-left"
-              )}
-              title={effectiveSidebarCollapsed ? "My Inbox" : undefined}
-              onClick={() => setPanel((p) => (p === "inbox" ? null : "inbox"))}
-              onDragOver={(e) => {
-                // Use dragover (not just dragenter) so nested children don't break hover/timer.
-                e.preventDefault();
-                // When ⌥ is held, browsers often switch to "copy" drag UX.
-                // We still perform a move-to-inbox; ⌥ is used as a modifier (keep assignee).
-                e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
-                if (!inboxDropActive) setInboxDropActive(true);
-                if (!inboxHoverTimer.current) {
-                  inboxHoverTimer.current = window.setTimeout(() => {
-                    setPanel("inbox");
-                  }, INBOX_LONG_HOVER_MS);
-                }
-              }}
-              onDragEnter={() => {
-                inboxDragDepth.current += 1;
-                setInboxDropActive(true);
-              }}
-              onDragLeave={() => {
-                inboxDragDepth.current -= 1;
-                if (inboxDragDepth.current <= 0) {
+              <button
+                className={cn(
+                  navItem,
+                  effectiveSidebarCollapsed && "justify-center px-2",
+                  panel === "inbox" && navItemActive,
+                  inboxDropActive && "ring-2 ring-blue-500/20 ring-inset bg-blue-50/40",
+                  "w-full text-left"
+                )}
+                title={effectiveSidebarCollapsed ? "My Inbox" : undefined}
+                onClick={() => setPanel((p) => (p === "inbox" ? null : "inbox"))}
+                onDragOver={(e) => {
+                  // Use dragover (not just dragenter) so nested children don't break hover/timer.
+                  e.preventDefault();
+                  // When ⌥ is held, browsers often switch to "copy" drag UX.
+                  // We still perform a move-to-inbox; ⌥ is used as a modifier (keep assignee).
+                  e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
+                  if (!inboxDropActive) setInboxDropActive(true);
+                  if (!inboxHoverTimer.current) {
+                    inboxHoverTimer.current = window.setTimeout(() => {
+                      setPanel("inbox");
+                    }, INBOX_LONG_HOVER_MS);
+                  }
+                }}
+                onDragEnter={() => {
+                  inboxDragDepth.current += 1;
+                  setInboxDropActive(true);
+                }}
+                onDragLeave={() => {
+                  inboxDragDepth.current -= 1;
+                  if (inboxDragDepth.current <= 0) {
+                    inboxDragDepth.current = 0;
+                    setInboxDropActive(false);
+                    if (inboxHoverTimer.current) window.clearTimeout(inboxHoverTimer.current);
+                    inboxHoverTimer.current = null;
+                  }
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  const taskId = e.dataTransfer.getData("text/plain");
+                  if (!taskId) return;
                   inboxDragDepth.current = 0;
                   setInboxDropActive(false);
                   if (inboxHoverTimer.current) window.clearTimeout(inboxHoverTimer.current);
                   inboxHoverTimer.current = null;
-                }
-              }}
-              onDrop={async (e) => {
-                e.preventDefault();
-                const taskId = e.dataTransfer.getData("text/plain");
-                if (!taskId) return;
-                inboxDragDepth.current = 0;
-                setInboxDropActive(false);
-                if (inboxHoverTimer.current) window.clearTimeout(inboxHoverTimer.current);
-                inboxHoverTimer.current = null;
-                try {
-                  // Default: clear assignee when moving to inbox. Hold ⌥ to keep assignee.
-                  await updateTask({
-                    id: taskId,
-                    location: "inbox",
-                    assigneeId: e.altKey ? undefined : null
-                  });
-                  // Maintain placements: move into the inbox list, and remove source placement unless ⌥ is held.
-                  if (inboxListId) {
-                    const raw = e.dataTransfer.getData("application/x-nxtup-task");
-                    const payload = raw ? (JSON.parse(raw) as { taskId: string; fromListId?: string | null }) : null;
-                    if (!e.altKey && payload?.fromListId && payload.fromListId !== inboxListId) {
-                      await deleteTaskPlacementByTaskAndList({
+                  try {
+                    // Default: clear assignee when moving to inbox. Hold ⌥ to keep assignee.
+                    await updateTask({
+                      id: taskId,
+                      location: "inbox",
+                      assigneeId: e.altKey ? undefined : null
+                    });
+                    // Maintain placements: move into the inbox list, and remove source placement unless ⌥ is held.
+                    if (inboxListId) {
+                      const raw = e.dataTransfer.getData("application/x-nxtup-task");
+                      const payload = raw ? (JSON.parse(raw) as { taskId: string; fromListId?: string | null }) : null;
+                      if (!e.altKey && payload?.fromListId && payload.fromListId !== inboxListId) {
+                        await deleteTaskPlacementByTaskAndList({
+                          workspaceId: workspaceId ?? "demo",
+                          taskId,
+                          listId: payload.fromListId
+                        });
+                      }
+                      await createTaskPlacement({
                         workspaceId: workspaceId ?? "demo",
                         taskId,
-                        listId: payload.fromListId
+                        listId: inboxListId,
+                        createdBy: session.user.id
                       });
+                      await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId ?? "demo"] });
                     }
-                    await createTaskPlacement({
-                      workspaceId: workspaceId ?? "demo",
-                      taskId,
-                      listId: inboxListId,
-                      createdBy: session.user.id
-                    });
-                    await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId ?? "demo"] });
+                    await qc.invalidateQueries({ queryKey: ["tasks", workspaceId ?? "demo"] });
+                  } catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.error("[DnD] drop to inbox failed", err);
                   }
-                  await qc.invalidateQueries({ queryKey: ["tasks", workspaceId ?? "demo"] });
-                } catch (err) {
-                  // eslint-disable-next-line no-console
-                  console.error("[DnD] drop to inbox failed", err);
-                }
-                // Do not auto-open the Inbox drawer on drop; long-hover is the deliberate open gesture.
-              }}
-            >
-              <Inbox size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? (
-                <span className="flex w-full items-center justify-between gap-2">
-                  <span>My Inbox</span>
-                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-medium text-slate-700">
-                    {inboxCount}
+                  // Do not auto-open the Inbox drawer on drop; long-hover is the deliberate open gesture.
+                }}
+              >
+                <Inbox size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? (
+                  <span className="flex w-full items-center justify-between gap-2">
+                    <span>My Inbox</span>
+                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-medium text-slate-700">
+                      {inboxCount}
+                    </span>
                   </span>
-                </span>
-              ) : (
-                <span className="sr-only">My Inbox</span>
-              )}
-            </button>
-            <NavLink
-              to={`${base}/dashboard`}
-              className={({ isActive }) =>
-                cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
-              }
-              title={effectiveSidebarCollapsed ? "My Dashboard" : undefined}
-            >
-              <LayoutDashboard size={18} className="text-slate-500" />
-              {!effectiveSidebarCollapsed ? <span>My Dashboard</span> : <span className="sr-only">My Dashboard</span>}
-            </NavLink>
+                ) : (
+                  <span className="sr-only">My Inbox</span>
+                )}
+              </button>
+              <NavLink
+                to={`${base}/dashboard`}
+                className={({ isActive }) =>
+                  cn(navItem, effectiveSidebarCollapsed && "justify-center px-2", isActive && navItemActive)
+                }
+                title={effectiveSidebarCollapsed ? "My Dashboard" : undefined}
+              >
+                <LayoutDashboard size={18} className="text-slate-500" />
+                {!effectiveSidebarCollapsed ? <span>My Dashboard</span> : <span className="sr-only">My Dashboard</span>}
+              </NavLink>
             </nav>
 
             <div className={cn("mt-6", effectiveSidebarCollapsed ? "px-1 py-2" : "px-2 py-2")}>

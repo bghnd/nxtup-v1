@@ -23,6 +23,7 @@ export type Profile = {
 export type Workspace = {
   id: WorkspaceId;
   name: string;
+  description?: string | null;
   createdBy: ProfileId;
 };
 
@@ -98,6 +99,18 @@ export type TaskPlacement = {
    * Lower numbers appear higher in the list. (Manual ordering foundation)
    */
   position: number;
+  createdBy: ProfileId;
+  createdAt: string; // ISO
+};
+
+export type TaskParticipantRole = "owner" | "watcher";
+
+export type TaskParticipant = {
+  id: string;
+  workspaceId: WorkspaceId;
+  taskId: TaskId;
+  profileId: ProfileId;
+  role: TaskParticipantRole;
   createdBy: ProfileId;
   createdAt: string; // ISO
 };
