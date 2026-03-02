@@ -179,6 +179,7 @@ export type CreateTaskInput = {
   dueDate?: string;
   assigneeId?: ProfileId | null;
   tags?: string[];
+  status?: "active" | "done";
 };
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {
@@ -197,7 +198,8 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     updatedAt: now,
     checklist: { total: 0, done: 0 },
     commentsCount: 0,
-    tags: input.tags ?? []
+    tags: input.tags ?? [],
+    status: input.status ?? "active"
   };
   tasksDb = [task, ...tasksDb];
   return task;
@@ -211,6 +213,7 @@ export type UpdateTaskInput = {
   dueDate?: string | null;
   assigneeId?: ProfileId | null;
   tags?: string[];
+  status?: "active" | "done";
 };
 
 export async function updateTask(input: UpdateTaskInput): Promise<Task> {
@@ -227,6 +230,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<Task> {
       input.dueDate === undefined ? prev.dueDate : input.dueDate === null ? undefined : input.dueDate,
     assigneeId: input.assigneeId === undefined ? prev.assigneeId : input.assigneeId,
     tags: input.tags ?? prev.tags,
+    status: input.status ?? prev.status,
     updatedAt: new Date().toISOString()
   };
   tasksDb = [...tasksDb.slice(0, idx), next, ...tasksDb.slice(idx + 1)];
@@ -236,6 +240,66 @@ export async function updateTask(input: UpdateTaskInput): Promise<Task> {
 export async function deleteTask(id: TaskId): Promise<void> {
   await sleep(80);
   tasksDb = tasksDb.filter((t) => t.id !== id);
+}
+
+export async function getLastEntry(workspaceId: WorkspaceId): Promise<Task | null> {
+  await sleep(80);
+  const workspaceTasks = tasksDb.filter((t) => t.workspaceId === workspaceId);
+  if (workspaceTasks.length === 0) return null;
+  // Sort by updatedAt descending
+  return workspaceTasks.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+}
+
+export async function duplicateTask(workspaceId: WorkspaceId, taskId: TaskId, createdBy: ProfileId): Promise<Task> {
+  await sleep(150);
+  const original = tasksDb.find((t) => t.id === taskId && t.workspaceId === workspaceId);
+  if (!original) throw new Error("Task not found");
+
+  const newId: TaskId = `t_${Math.random().toString(36).slice(2, 10)}`;
+  const now = new Date().toISOString();
+
+  const duplicatedTask: Task = {
+    ...original,
+    id: newId,
+    createdBy,
+    updatedAt: now,
+  };
+
+  tasksDb = [duplicatedTask, ...tasksDb];
+
+  // Duplicate placements
+  const placements = taskPlacementsDb.filter((p) => p.taskId === taskId && p.workspaceId === workspaceId);
+  for (const placement of placements) {
+    const newPlacementId: TaskPlacementId = `pl_${Math.random().toString(36).slice(2, 10)}`;
+    taskPlacementsDb = [
+      ...taskPlacementsDb,
+      {
+        ...placement,
+        id: newPlacementId,
+        taskId: newId,
+        createdBy,
+        createdAt: now,
+      }
+    ];
+  }
+
+  // Duplicate participants
+  const participants = taskParticipantsDb.filter((p) => p.taskId === taskId && p.workspaceId === workspaceId);
+  for (const participant of participants) {
+    const newParticipantId = `tp_${Math.random().toString(36).slice(2, 10)}`;
+    taskParticipantsDb = [
+      ...taskParticipantsDb,
+      {
+        ...participant,
+        id: newParticipantId,
+        taskId: newId,
+        createdBy,
+        createdAt: now,
+      }
+    ];
+  }
+
+  return duplicatedTask;
 }
 
 export type CreateInviteInput = {
@@ -385,11 +449,13 @@ export async function deleteWorkspace(id: WorkspaceId): Promise<void> {
 // Task Groups
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function createTaskGroup(input: {
+export type CreateTaskGroupInput = {
   workspaceId: WorkspaceId;
   title: string;
   description?: string | null;
-}): Promise<TaskGroup> {
+};
+
+export async function createTaskGroup(input: CreateTaskGroupInput): Promise<TaskGroup> {
   await sleep(100);
   const id = `g_${Math.random().toString(36).slice(2, 10)}`;
   const maxSort = Math.max(0, ...taskGroupsDb.map((g) => g.sortOrder));
@@ -433,13 +499,16 @@ export async function deleteTaskGroup(id: string): Promise<void> {
 // Task Lists
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function createTaskList(input: {
+export type CreateTaskListInput = {
   workspaceId: WorkspaceId;
   groupId: string | null;
   type: TaskList["type"];
   title: string;
+  description?: string | null;
   refId?: string | null;
-}): Promise<TaskList> {
+};
+
+export async function createTaskList(input: CreateTaskListInput): Promise<TaskList> {
   await sleep(100);
   const id = `l_${Math.random().toString(36).slice(2, 10)}`;
   const maxSort = Math.max(0, ...taskListsDb.map((l) => l.sortOrder));
@@ -450,6 +519,7 @@ export async function createTaskList(input: {
     type: input.type,
     refId: input.refId ?? null,
     title: input.title.trim() || "Untitled List",
+    description: input.description ?? undefined,
     sortOrder: maxSort + 100
   };
   taskListsDb = [...taskListsDb, list];
@@ -459,6 +529,7 @@ export async function createTaskList(input: {
 export async function updateTaskList(input: {
   id: string;
   title?: string;
+  description?: string | null;
   groupId?: string | null;
 }): Promise<TaskList> {
   await sleep(100);
@@ -468,6 +539,7 @@ export async function updateTaskList(input: {
   const next: TaskList = {
     ...prev,
     title: input.title !== undefined ? input.title : prev.title,
+    description: input.description !== undefined ? (input.description ?? undefined) : prev.description,
     groupId: input.groupId !== undefined ? input.groupId : prev.groupId
   };
   taskListsDb = [...taskListsDb.slice(0, idx), next, ...taskListsDb.slice(idx + 1)];
@@ -549,6 +621,8 @@ export async function createMemberPlaceholder(input: {
   workspaceId: WorkspaceId;
   name: string;
   email?: string;
+  status?: string;
+  role?: string;
 }): Promise<Profile> {
   await sleep(120);
   const id = `p_${Math.random().toString(36).slice(2, 10)}`;

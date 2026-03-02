@@ -26,6 +26,7 @@ import { getAdapterKind, useMockAdapter, useSupabaseAdapter } from "../../data/a
 import { ContextPanel, type PanelType } from "./contextPanel/ContextPanel";
 import { InboxPanel } from "./contextPanel/InboxPanel";
 import { loadDisplayPrefs } from "../state/displayPrefs";
+import { GlobalSearchModal } from "../components/GlobalSearchModal";
 
 const COLLAPSED_KEY = "nxtup.sidebar.collapsed.v1";
 const COLLAPSE_MODE_KEY = "nxtup.sidebar.collapseMode.v1"; // "auto" | "manual"
@@ -41,7 +42,7 @@ const navItemActive = "bg-slate-100 text-slate-900 font-medium";
 export function AppLayout() {
   const { workspaceId } = useParams();
   const base = workspaceId ? `/w/${workspaceId}` : "/w/demo";
-  const { session, setUser, setWorkspaceRole, allUsers } = useStubSession();
+  const { session, setUser, setRealUser, setWorkspaceRole, allUsers } = useStubSession();
   const nav = useNavigate();
   const qc = useQueryClient();
   const [authOpen, setAuthOpen] = React.useState(false);
@@ -65,10 +66,10 @@ export function AppLayout() {
       const pinned = localStorage.getItem(PANEL_PINNED_KEY) === "1";
       if (!pinned) return null;
       const last = localStorage.getItem(PANEL_LAST_KEY) as string | null;
-      if (last === "inbox" || last === "onlyme" || last === "raw") return last;
+      if (last === "inbox" || last === "activity" || last === "saved") return last;
       // Back-compat for older saved panel ids.
-      if (last === "activity") return "onlyme";
-      if (last === "saved") return "raw";
+      if (last === "onlyme") return "activity";
+      if (last === "raw") return "saved";
       return "inbox";
     } catch {
       return null;
@@ -178,10 +179,12 @@ export function AppLayout() {
 
       const s = await getSupabaseSession();
       const email = s.data.session?.user?.email ?? null;
+      const uid = s.data.session?.user?.id;
       if (!alive) return;
       setSupabaseEmail(email);
 
-      if (email) {
+      if (email && uid) {
+        setRealUser({ id: uid, name: email.split("@")[0] || "User", email, avatarUrl: undefined });
         useSupabaseAdapter();
         setAdapterKind(getAdapterKind());
 
@@ -580,9 +583,7 @@ export function AppLayout() {
                 count={inboxCount}
                 tasks={inboxTasks}
                 display={displayPrefs}
-                inboxListId={inboxListId}
                 onOpenTask={(taskId) => {
-                  // Open the task drawer by navigating to the board with a task query param.
                   nav(`${base}/board?task=${encodeURIComponent(taskId)}`);
                 }}
                 onDropTaskToInbox={async (taskId, opts) => {
@@ -594,14 +595,14 @@ export function AppLayout() {
                   await qc.invalidateQueries({ queryKey: ["tasks", workspaceId ?? "demo"] });
                 }}
               />
-            ) : panel === "onlyme" ? (
+            ) : panel === "activity" ? (
               <div className="p-4">
-                <div className="text-sm font-semibold text-slate-900">OnlyMe</div>
+                <div className="text-sm font-semibold text-slate-900">Activity</div>
                 <div className="mt-2 text-sm text-slate-600">
-                  Placeholder tab for a future phase: a personal view of tasks relevant only to the current user.
+                  Placeholder tab.
                 </div>
               </div>
-            ) : panel === "raw" ? (
+            ) : panel === "saved" ? (
               <div className="p-4">
                 <div className="text-sm font-semibold text-slate-900">Raw Mode</div>
                 <div className="mt-2 text-sm text-slate-600">
@@ -635,6 +636,7 @@ export function AppLayout() {
           </div>
         </main>
       </div>
+      <GlobalSearchModal />
     </div>
   );
 }

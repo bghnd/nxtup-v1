@@ -134,7 +134,7 @@ export const demoTaskLists: TaskList[] = [
   }
 ];
 
-export const demoTaskPlacements: TaskPlacement[] = [];
+
 
 export const demoTasks: Task[] = [
   {
@@ -149,6 +149,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 0, done: 0 },
     commentsCount: 0,
+    status: "active",
     tags: ["inbox"]
   },
   {
@@ -163,6 +164,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 0, done: 0 },
     commentsCount: 0,
+    status: "active",
     tags: ["inbox"]
   },
   {
@@ -177,6 +179,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 5, done: 3 },
     commentsCount: 7,
+    status: "active",
     tags: ["security"]
   },
   {
@@ -191,6 +194,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 2, done: 2 },
     commentsCount: 9,
+    status: "active",
     tags: ["marketing"]
   },
   {
@@ -205,6 +209,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 0, done: 0 },
     commentsCount: 1,
+    status: "active",
     tags: ["people"]
   },
   {
@@ -219,6 +224,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 0, done: 0 },
     commentsCount: 8,
+    status: "active",
     tags: ["planning"]
   },
   {
@@ -233,6 +239,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 4, done: 0 },
     commentsCount: 12,
+    status: "active",
     tags: ["design"]
   },
   {
@@ -247,6 +254,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 1, done: 0 },
     commentsCount: 2,
+    status: "active",
     tags: ["engineering"]
   },
   {
@@ -261,6 +269,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 0, done: 0 },
     commentsCount: 0,
+    status: "active",
     tags: ["research"]
   },
   {
@@ -275,6 +284,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 6, done: 2 },
     commentsCount: 5,
+    status: "active",
     tags: ["backend"]
   },
   {
@@ -289,6 +299,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 10, done: 8 },
     commentsCount: 4,
+    status: "active",
     tags: ["engineering"]
   },
   {
@@ -303,6 +314,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 3, done: 1 },
     commentsCount: 4,
+    status: "active",
     tags: ["devops"]
   },
   {
@@ -317,6 +329,7 @@ export const demoTasks: Task[] = [
     updatedAt: now,
     checklist: { total: 1, done: 1 },
     commentsCount: 10,
+    status: "active",
     tags: ["bug"]
   }
 ];
@@ -376,6 +389,7 @@ function seedPlacementsFromTasks(): TaskPlacement[] {
   return placements;
 }
 
-demoTaskPlacements.push(...seedPlacementsFromTasks());
+// Task Placements built dynamically from demoTasks on load
+export const demoTaskPlacements: TaskPlacement[] = seedPlacementsFromTasks();
 
 

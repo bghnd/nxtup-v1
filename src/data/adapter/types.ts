@@ -1,7 +1,9 @@
 import type {
   CreateTaskPlacementInput,
   CreateInviteInput,
+  CreateTaskGroupInput,
   CreateTaskInput,
+  CreateTaskListInput,
   UpdateTaskInput,
   WorkspaceMemberRow
 } from "../api";
@@ -17,6 +19,7 @@ import type {
 } from "../../domain/types";
 
 export type DataAdapter = {
+  listWorkspaces: () => Promise<Workspace[]>;
   getWorkspace: (workspaceId: WorkspaceId) => Promise<Workspace>;
   listProfiles: (workspaceId: WorkspaceId) => Promise<Profile[]>;
   listWorkspaceMembers: (workspaceId: WorkspaceId) => Promise<WorkspaceMemberRow[]>;
@@ -27,6 +30,8 @@ export type DataAdapter = {
   listTaskGroups: (workspaceId: WorkspaceId) => Promise<TaskGroup[]>;
   listTaskLists: (workspaceId: WorkspaceId) => Promise<TaskList[]>;
   listTaskPlacements: (workspaceId: WorkspaceId) => Promise<TaskPlacement[]>;
+  createTaskGroup: (input: CreateTaskGroupInput) => Promise<TaskGroup>;
+  createTaskList: (input: CreateTaskListInput) => Promise<TaskList>;
   createTaskPlacement: (input: CreateTaskPlacementInput) => Promise<TaskPlacement>;
   updateTaskPlacement: (input: {
     id: string;

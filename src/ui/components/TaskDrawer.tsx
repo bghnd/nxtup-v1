@@ -1,9 +1,10 @@
 import React from "react";
-import type { Priority, Profile, Task, TaskLocation } from "../../domain/types";
+import type { Priority, Profile, Task, TaskLocation, TaskList } from "../../domain/types";
 import { cn } from "../lib/cn";
 import { Button } from "./Button";
 import { Input } from "./Input";
 import { Select } from "./Select";
+import { Plus } from "lucide-react";
 
 export type TaskDrawerMode = "create" | "edit";
 
@@ -12,6 +13,8 @@ export function TaskDrawer({
   mode,
   task,
   profiles,
+  currentUserId,
+  lists = [],
   onClose,
   onSave,
   onDelete
@@ -20,6 +23,8 @@ export function TaskDrawer({
   mode: TaskDrawerMode;
   task?: Task | null;
   profiles: Profile[];
+  currentUserId: string;
+  lists?: TaskList[];
   onClose: () => void;
   onSave: (values: {
     title: string;
@@ -27,6 +32,8 @@ export function TaskDrawer({
     dueDate?: string | null;
     location: TaskLocation;
     assigneeId: string | null;
+    listId?: string | null;
+    newListName?: string | null;
   }) => void;
   onDelete?: () => void;
 }) {
@@ -45,6 +52,13 @@ export function TaskDrawer({
   const [location, setLocation] = React.useState<TaskLocation>("inbox");
   const [assigneeId, setAssigneeId] = React.useState<string>(""); // empty == unassigned
 
+  // Location combobox state
+  const [locationSearch, setLocationSearch] = React.useState("");
+  const [isFocused, setIsFocused] = React.useState(false);
+  const [locationMenuOpen, setLocationMenuOpen] = React.useState(false);
+  const [selectedListId, setSelectedListId] = React.useState<string | null>(null);
+  const [newListName, setNewListName] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     if (!open) return;
     if (mode === "edit" && task) {
@@ -53,6 +67,9 @@ export function TaskDrawer({
       setDueDate(task.dueDate ?? "");
       setLocation(task.location);
       setAssigneeId(task.assigneeId ?? "");
+      setLocationSearch(task.location === "inbox" ? "Inbox" : "Board");
+      setSelectedListId(null);
+      setNewListName(null);
       return;
     }
 
@@ -61,14 +78,24 @@ export function TaskDrawer({
     setPriority("medium");
     setDueDate("");
     setLocation("inbox");
-    setAssigneeId("");
-  }, [open, mode, task, profiles]);
+    setAssigneeId(currentUserId);
+    setLocationSearch("Inbox");
+    setSelectedListId(null);
+    setNewListName(null);
+    setIsFocused(false);
+  }, [open, mode, task, profiles, currentUserId]);
+
+  const displayLocation = React.useMemo(() => {
+    if (isFocused) return locationSearch;
+    if (location === "inbox") return "Inbox";
+    if (selectedListId) return lists?.find(l => l.id === selectedListId)?.title ?? "Board";
+    if (newListName) return newListName;
+    return "Board";
+  }, [isFocused, locationSearch, location, selectedListId, newListName, lists]);
 
   if (!open) return null;
 
-  const canSave =
-    title.trim().length > 0 &&
-    (location === "inbox" ? true : assigneeId.trim().length > 0);
+  const canSave = title.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50">
@@ -103,10 +130,80 @@ export function TaskDrawer({
               </Field>
 
               <Field label="Location">
-                <Select value={location} onChange={(e) => setLocation(e.target.value as TaskLocation)}>
-                  <option value="inbox">Inbox</option>
-                  <option value="board">Board</option>
-                </Select>
+                <div className="relative">
+                  <Input
+                    value={displayLocation}
+                    onChange={(e) => {
+                      setLocationSearch(e.target.value);
+                      setLocationMenuOpen(true);
+                      setSelectedListId(null);
+                      setNewListName(null);
+                      setLocation("board");
+                    }}
+                    onFocus={() => {
+                      setIsFocused(true);
+                      setLocationSearch("");
+                      setLocationMenuOpen(true);
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setIsFocused(false);
+                        setLocationMenuOpen(false);
+                      }, 200);
+                    }}
+                    placeholder="Type to search or create a list..."
+                  />
+                  {locationMenuOpen && (
+                    <div className="absolute top-full left-0 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg z-10">
+                      <div
+                        className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                        onMouseDown={() => {
+                          setLocation("inbox");
+                          setLocationSearch("Inbox");
+                          setSelectedListId(null);
+                          setNewListName(null);
+                          setLocationMenuOpen(false);
+                        }}
+                      >
+                        Inbox
+                      </div>
+                      {lists
+                        .filter((l) => l.title.toLowerCase().includes(locationSearch.toLowerCase()))
+                        .map((list) => (
+                          <div
+                            key={list.id}
+                            className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                            onMouseDown={() => {
+                              setLocation("board");
+                              setLocationSearch(list.title);
+                              setSelectedListId(list.id);
+                              setNewListName(null);
+                              setLocationMenuOpen(false);
+                            }}
+                          >
+                            {list.title}
+                          </div>
+                        ))}
+                      {locationSearch.trim().length > 0 &&
+                        !lists.some(
+                          (l) => l.title.toLowerCase() === locationSearch.trim().toLowerCase()
+                        ) &&
+                        locationSearch.trim().toLowerCase() !== "inbox" && (
+                          <div
+                            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+                            onMouseDown={() => {
+                              setLocation("board");
+                              setNewListName(locationSearch.trim());
+                              setSelectedListId(null);
+                              setLocationMenuOpen(false);
+                            }}
+                          >
+                            <Plus size={14} /> Create list "{locationSearch.trim()}"
+                          </div>
+                        )}
+                    </div>
+                  )}
+                </div>
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
@@ -172,8 +269,10 @@ export function TaskDrawer({
                       title: title.trim(),
                       priority,
                       dueDate: dueDate.length ? dueDate : null,
-                      location,
-                      assigneeId: assigneeId.length ? assigneeId : null
+                      location: locationSearch.trim().toLowerCase() === "inbox" ? "inbox" : location,
+                      assigneeId: assigneeId.length ? assigneeId : null,
+                      listId: selectedListId,
+                      newListName: newListName
                     })
                   }
                 >

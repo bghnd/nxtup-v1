@@ -33,7 +33,8 @@ async function listWorkspacesFromSupabase(): Promise<Workspace[]> {
     return workspaces.map((w) => ({
         id: w.id,
         name: w.name,
-        description: w.description ?? undefined
+        description: w.description ?? undefined,
+        createdBy: session.session.user.id
     }));
 }
 
@@ -46,17 +47,7 @@ async function createWorkspaceInSupabase(name: string): Promise<Workspace> {
 
     const userId = session.session.user.id;
 
-    // Create workspace
-    const { data: ws, error: wsError } = await supabase
-        .from("workspaces")
-        .insert({ name })
-        .select()
-        .single();
-
-    if (wsError || !ws) throw new Error(wsError?.message || "Failed to create workspace");
-
-    // Add user as owner (also create a profile if needed)
-    // First ensure profile exists
+    // First ensure profile exists so workspaces.created_by foreign key is satisfied
     const { error: profileError } = await supabase
         .from("profiles")
         .upsert({
@@ -68,6 +59,13 @@ async function createWorkspaceInSupabase(name: string): Promise<Workspace> {
     if (profileError) {
         console.warn("Failed to upsert profile:", profileError);
     }
+
+    // Create workspace
+    const { data: ws, error: wsError } = await supabase
+        .from("workspaces")
+        .insert({ name, created_by: userId })
+        .select()
+        .single();
 
     // Add as workspace member
     const { error: memberError } = await supabase
@@ -83,10 +81,26 @@ async function createWorkspaceInSupabase(name: string): Promise<Workspace> {
         console.warn("Failed to add as member:", memberError);
     }
 
+    // Create default Inbox list
+    const { error: inboxError } = await supabase
+        .from("task_lists")
+        .insert({
+            workspace_id: ws.id,
+            group_id: null,
+            type: "inbox",
+            title: "Inbox",
+            sort_order: Math.floor(Date.now() / 1000)
+        });
+
+    if (inboxError) {
+        console.warn("Failed to create default inbox:", inboxError);
+    }
+
     return {
         id: ws.id,
         name: ws.name,
-        description: ws.description ?? undefined
+        description: ws.description ?? undefined,
+        createdBy: userId
     };
 }
 

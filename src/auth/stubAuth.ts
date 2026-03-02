@@ -47,7 +47,15 @@ export function useStubSession() {
     });
   }, []);
 
-  return { session, setUser, setWorkspaceRole, allUsers: demoProfiles };
+  const setRealUser = React.useCallback((user: Profile) => {
+    setSession((prev) => {
+      const next = { ...prev, user };
+      saveSession(next);
+      return next;
+    });
+  }, []);
+
+  return { session, setUser, setRealUser, setWorkspaceRole, allUsers: demoProfiles };
 }
 
 

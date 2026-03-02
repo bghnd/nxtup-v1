@@ -5,15 +5,19 @@ export type CardProps = React.HTMLAttributes<HTMLDivElement> & {
   children: React.ReactNode;
 };
 
-export function Card({ className, children, ...props }: CardProps) {
-  return (
-    <div
-      className={cn("rounded-xl bg-white shadow-card border border-slate-100", className)}
-      {...props}
-    >
-      {children}
-    </div>
-  );
-}
+export const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, children, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={cn("rounded-xl bg-white shadow-card border border-slate-100", className)}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+Card.displayName = "Card";
 
 

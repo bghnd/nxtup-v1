@@ -18,6 +18,11 @@ import type {
 } from "../api";
 import { supabase } from "../supabaseClient";
 
+function isValidUUID(uuid: string): boolean {
+  const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return regex.test(uuid);
+}
+
 function assertEnv() {
   const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -37,18 +42,19 @@ function mapProfile(row: any): Profile {
 function mapTask(row: any): Task {
   return {
     id: row.id,
-    workspaceId: row.workspace_id,
-    location: row.location,
+    workspaceId: row.workspaceId,
+    location: row.location as Task["location"],
     title: row.title,
-    description: row.description ?? undefined,
-    priority: row.priority,
-    dueDate: row.due_date ?? undefined,
-    assigneeId: row.assignee_id ?? null,
-    createdBy: row.created_by,
-    updatedAt: row.updated_at,
-    checklist: { total: 0, done: 0 }, // TODO: join checklist items
-    commentsCount: 0, // TODO: join comments
-    tags: [] // TODO: join tags
+    description: row.description,
+    priority: row.priority as Task["priority"],
+    dueDate: row.dueDate,
+    assigneeId: row.assigneeId,
+    createdBy: row.createdBy,
+    updatedAt: row.updatedAt,
+    checklist: { total: 0, done: 0 },
+    commentsCount: 0,
+    status: (row as any).status || "active",
+    tags: []
   };
 }
 
@@ -87,8 +93,37 @@ function mapPlacement(row: any): TaskPlacement {
 }
 
 export const supabaseAdapter: DataAdapter = {
+  async listWorkspaces() {
+    assertEnv();
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) return [];
+
+    const userId = session.session.user.id;
+
+    // Get workspaces where user is a member
+    const { data: memberRows, error: memberError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("profile_id", userId);
+
+    if (memberError || !memberRows) return [];
+
+    const workspaceIds = memberRows.map((r) => r.workspace_id);
+    if (workspaceIds.length === 0) return [];
+
+    const { data: workspaces, error } = await supabase
+      .from("workspaces")
+      .select("*")
+      .in("id", workspaceIds);
+
+    if (error || !workspaces) return [];
+
+    return workspaces.map(mapWorkspace);
+  },
+
   async getWorkspace(workspaceId: WorkspaceId) {
     assertEnv();
+    if (!isValidUUID(workspaceId)) throw new Error(`Invalid UUID: ${workspaceId}`);
     const { data, error } = await supabase.from("workspaces").select("*").eq("id", workspaceId).single();
     if (error) throw error;
     return mapWorkspace(data);
@@ -171,6 +206,7 @@ export const supabaseAdapter: DataAdapter = {
 
   async listTasks(workspaceId: WorkspaceId) {
     assertEnv();
+    if (!isValidUUID(workspaceId)) return [];
     const { data, error } = await supabase.from("tasks").select("*").eq("workspace_id", workspaceId);
     if (error) throw error;
     return (data ?? []).map(mapTask);
@@ -178,20 +214,68 @@ export const supabaseAdapter: DataAdapter = {
 
   async listTaskGroups(workspaceId: WorkspaceId) {
     assertEnv();
+    if (!isValidUUID(workspaceId)) return [];
     const { data, error } = await supabase.from("task_groups").select("*").eq("workspace_id", workspaceId).order("sort_order");
     if (error) throw error;
     return (data ?? []).map(mapGroup);
   },
 
+  async createTaskGroup(input) {
+    assertEnv();
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) throw new Error("Not authenticated");
+    const userId = session.session.user.id;
+
+    const { data, error } = await supabase
+      .from("task_groups")
+      .insert({
+        workspace_id: input.workspaceId,
+        title: input.title.trim() || "Untitled Group",
+        description: input.description,
+        sort_order: Math.floor(Date.now() / 1000),
+        created_by: userId
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapGroup(data);
+  },
+
   async listTaskLists(workspaceId: WorkspaceId) {
     assertEnv();
+    if (!isValidUUID(workspaceId)) return [];
     const { data, error } = await supabase.from("task_lists").select("*").eq("workspace_id", workspaceId).order("sort_order");
     if (error) throw error;
     return (data ?? []).map(mapList);
   },
 
+  async createTaskList(input) {
+    assertEnv();
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) throw new Error("Not authenticated");
+    const userId = session.session.user.id;
+
+    const { data, error } = await supabase
+      .from("task_lists")
+      .insert({
+        workspace_id: input.workspaceId,
+        group_id: input.groupId,
+        type: input.type,
+        ref_id: input.refId,
+        title: input.title.trim() || "Untitled List",
+        description: input.description,
+        sort_order: Math.floor(Date.now() / 1000), // quick easy sort fallback that fits in INT4
+        created_by: userId
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapList(data);
+  },
+
   async listTaskPlacements(workspaceId: WorkspaceId) {
     assertEnv();
+    if (!isValidUUID(workspaceId)) return [];
     const { data, error } = await supabase.from("task_placements").select("*").eq("workspace_id", workspaceId);
     if (error) throw error;
     return (data ?? []).map(mapPlacement);

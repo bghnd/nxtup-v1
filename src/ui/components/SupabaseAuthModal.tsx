@@ -132,7 +132,7 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
     };
 
     return (
-        <Modal open={open} onOpenChange={onOpenChange} title="Supabase Auth">
+        <Modal open={open} onClose={() => onOpenChange(false)} title="Supabase Auth">
             <div className="space-y-4">
                 {error && (
                     <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
@@ -185,8 +185,8 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                             <button
                                 type="button"
                                 className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${mode === "password"
-                                        ? "border-blue-500 text-blue-600"
-                                        : "border-transparent text-slate-500 hover:text-slate-700"
+                                    ? "border-blue-500 text-blue-600"
+                                    : "border-transparent text-slate-500 hover:text-slate-700"
                                     }`}
                                 onClick={() => setMode("password")}
                             >
@@ -195,8 +195,8 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                             <button
                                 type="button"
                                 className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${mode === "magic"
-                                        ? "border-blue-500 text-blue-600"
-                                        : "border-transparent text-slate-500 hover:text-slate-700"
+                                    ? "border-blue-500 text-blue-600"
+                                    : "border-transparent text-slate-500 hover:text-slate-700"
                                     }`}
                                 onClick={() => setMode("magic")}
                             >

@@ -57,6 +57,7 @@ export type Task = {
   title: string;
   description?: string;
   priority: Priority;
+  status: "active" | "done"; // MVP requirement for collapsible Done section
   dueDate?: string; // YYYY-MM-DD
   assigneeId: ProfileId | null;
   createdBy: ProfileId;
@@ -87,6 +88,7 @@ export type TaskList = {
    */
   refId?: string | null;
   title: string;
+  description?: string;
   sortOrder: number;
 };
 

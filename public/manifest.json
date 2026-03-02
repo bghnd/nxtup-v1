@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "NXTUP",
+  "version": "1.0.0",
+  "description": "NXTUP Chrome Extension",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Open NXTUP"
+  },
+  "permissions": ["storage"]
+}

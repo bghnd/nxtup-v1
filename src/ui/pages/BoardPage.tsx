@@ -27,8 +27,11 @@ import {
   updateWorkspace,
   updateTaskGroup,
   updateTaskList,
-  updateTask
+  updateTask,
+  getLastEntry,
+  duplicateTask
 } from "../../data/client";
+import { toast } from "react-toastify";
 import type { Profile, Task, TaskGroup, TaskList, TaskPlacement } from "../../domain/types";
 import type { TaskParticipant } from "../../domain/types";
 import { Button } from "../components/Button";
@@ -41,6 +44,8 @@ import { cn } from "../lib/cn";
 import { TaskDrawer } from "../components/TaskDrawer";
 import { Modal } from "../components/Modal";
 import { InlineEditableText } from "../components/InlineEditableText";
+import { DraggableTask } from "../components/DraggableTask";
+import { DroppableListCard, DoneSection } from "../components/DroppableListCard";
 import { useQueryClient } from "@tanstack/react-query";
 import { DISPLAY_KEY, loadDisplayPrefs, type DisplayPrefs } from "../state/displayPrefs";
 import { useStubSession } from "../../auth/stubAuth";
@@ -155,6 +160,28 @@ export function BoardPage() {
   const { workspaceId = "demo" } = useParams();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const handleTaskDrop = async (taskId: string, listId: string, fromListId: string | null) => {
+    try {
+      await updateTask({ id: taskId, location: "board" });
+      await createTaskPlacement({
+        workspaceId,
+        taskId,
+        listId,
+        createdBy: session.user.id
+      });
+      if (fromListId && fromListId !== listId) {
+        await deleteTaskPlacementByTaskAndList({ workspaceId, taskId, listId: fromListId });
+      }
+      setLastUngroupedListId(listId);
+      await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+      await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+    } catch (err) {
+      console.error("[DnD] drop failed", err);
+    }
+  };
+
+
   const nav = useNavigate();
   const { session } = useStubSession();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
@@ -166,6 +193,21 @@ export function BoardPage() {
   const [quickAddText, setQuickAddText] = React.useState("");
   const [quickAddActiveIdx, setQuickAddActiveIdx] = React.useState(0);
   const [addMenuOpen, setAddMenuOpen] = React.useState(false);
+  const addMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target as Node)) {
+        setAddMenuOpen(false);
+      }
+    }
+    if (addMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [addMenuOpen]);
   const [createTargetListId, setCreateTargetListId] = React.useState<string | null>(null);
   const [collapsedGroupsById, setCollapsedGroupsById] = React.useState<Record<string, boolean>>(() => {
     try {
@@ -205,14 +247,14 @@ export function BoardPage() {
   const [unknownMemberModal, setUnknownMemberModal] = React.useState<
     | null
     | {
-        taskPart: string;
-        op: null | "move" | "add";
-        listPart: string | null;
-        kind: "owner" | "watcher";
-        token: string;
-        ownerId: string | null;
-        watcherIds: string[];
-      }
+      taskPart: string;
+      op: null | "move" | "add";
+      listPart: string | null;
+      kind: "owner" | "watcher";
+      token: string;
+      ownerId: string | null;
+      watcherIds: string[];
+    }
   >(null);
   const [unknownMemberNameDraft, setUnknownMemberNameDraft] = React.useState("");
   const [unknownMemberEmailDraft, setUnknownMemberEmailDraft] = React.useState("");
@@ -427,6 +469,7 @@ export function BoardPage() {
   }, [lists]);
 
   const inboxList = React.useMemo(() => lists.find((l) => l.type === "inbox") ?? null, [lists]);
+  const inboxP = placements.find((p) => p.listId === inboxList?.id);
 
   function getLastUngroupedListId(): string | null {
     try {
@@ -560,6 +603,7 @@ export function BoardPage() {
       location: "inbox",
       assigneeId: input.ownerId
     });
+    toast.success("Task created");
 
     const target = input.op ? findListFromText(input.listPart ?? "") : null;
     const placementList = target ?? inboxList;
@@ -695,37 +739,35 @@ export function BoardPage() {
             <Users size={16} className="text-slate-600" />
             Team Members
           </Button>
-          <div className="relative">
+          <div ref={addMenuRef} className="relative flex shadow-sm rounded-lg">
             <Button
+              className="rounded-e-none pr-3 focus:z-10"
+              onClick={() => {
+                setAddMenuOpen(false);
+                setCreateTargetListId(null);
+                setDrawerMode("create");
+                setActiveTaskId(null);
+                setDrawerOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              Add task
+            </Button>
+            <Button
+              className="rounded-s-none px-2 border-l border-blue-700/30 shadow-none focus:z-10"
               onClick={() => setAddMenuOpen((v) => !v)}
               aria-expanded={addMenuOpen}
               aria-haspopup="menu"
-              title="Add…"
+              title="Add options…"
             >
-              <Plus size={16} />
-              Add…
+              <ChevronDown size={16} />
             </Button>
+
             {addMenuOpen ? (
               <div
-                className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-card z-20"
+                className="absolute right-0 top-[110%] w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-card z-20"
                 role="menu"
               >
-                <button
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                  role="menuitem"
-                  onClick={async () => {
-                    setAddMenuOpen(false);
-                    const target = await ensureUngroupedListForCapture();
-                    setCreateTargetListId(target?.id ?? null);
-                    if (target?.id) setLastUngroupedListId(target.id);
-                    setDrawerMode("create");
-                    setActiveTaskId(null);
-                    setDrawerOpen(true);
-                  }}
-                >
-                  Add Task
-                  <div className="text-xs text-slate-500">Captures into last used ungrouped list</div>
-                </button>
 
                 <button
                   className={cn(
@@ -734,10 +776,11 @@ export function BoardPage() {
                   )}
                   role="menuitem"
                   disabled={ungroupedLists.length >= 3}
-                  onClick={async () => {
+                  onClick={() => {
                     setAddMenuOpen(false);
-                    const created = await createUngroupedList();
-                    if (created?.id) setLastUngroupedListId(created.id);
+                    setListTitleDraft("");
+                    setListTypeDraft("other");
+                    setListModal({ mode: "create", groupId: null });
                   }}
                 >
                   Add List (ungrouped)
@@ -864,7 +907,32 @@ export function BoardPage() {
               if (e.key !== "Enter") return;
               e.preventDefault();
               const raw = quickAddText.trim();
-              if (!raw.length) return;
+              if (raw === "/last") {
+                const last = await getLastEntry(workspaceId);
+                if (last) {
+                  setDrawerMode("edit");
+                  setActiveTaskId(last.id);
+                  setDrawerOpen(true);
+                  setQuickAddText("");
+                } else {
+                  toast.info("No recent entries found");
+                }
+                return;
+              }
+              if (raw === "/duplicate") {
+                const last = await getLastEntry(workspaceId);
+                if (last) {
+                  const duplicated = await duplicateTask(workspaceId, last.id, session.user.id);
+                  await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+                  await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+                  toast.success("Task duplicated successfully");
+                  setQuickAddText("");
+                } else {
+                  toast.info("No recent entries to duplicate");
+                }
+                return;
+              }
+
               const forceCreate = e.metaKey || e.ctrlKey;
               try {
                 const parsed = parseQuickEntry(raw);
@@ -874,7 +942,7 @@ export function BoardPage() {
                 if (parsed.op && targetList && quickAddSuggestions.length && !forceCreate) {
                   const selected =
                     quickAddSuggestions[
-                      Math.max(0, Math.min(quickAddActiveIdx, quickAddSuggestions.length - 1))
+                    Math.max(0, Math.min(quickAddActiveIdx, quickAddSuggestions.length - 1))
                     ];
                   if (!selected) return;
 
@@ -940,7 +1008,7 @@ export function BoardPage() {
                 if (!forceCreate && quickAddSuggestions.length) {
                   const selected =
                     quickAddSuggestions[
-                      Math.max(0, Math.min(quickAddActiveIdx, quickAddSuggestions.length - 1))
+                    Math.max(0, Math.min(quickAddActiveIdx, quickAddSuggestions.length - 1))
                     ];
                   if (selected) {
                     setDrawerMode("edit");
@@ -1031,39 +1099,11 @@ export function BoardPage() {
                 .filter((t) => filteredTaskIdSet.has(t.id));
               const count = listTasks.length;
               return (
-                <Card
+                <DroppableListCard
                   key={list.id}
+                  listId={list.id}
                   className="w-[320px] shrink-0 p-4"
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
-                  }}
-                  onDrop={async (e) => {
-                    e.preventDefault();
-                    const raw = e.dataTransfer.getData(DND_MIME);
-                    const payload = raw ? (JSON.parse(raw) as DragPayload) : null;
-                    const taskId = payload?.taskId ?? e.dataTransfer.getData("text/plain");
-                    if (!taskId) return;
-                    const fromListId = payload?.fromListId ?? null;
-                    try {
-                      await updateTask({ id: taskId, location: "board" });
-                      await createTaskPlacement({
-                        workspaceId,
-                        taskId,
-                        listId: list.id,
-                        createdBy: session.user.id
-                      });
-                      if (!e.altKey && fromListId && fromListId !== list.id) {
-                        await deleteTaskPlacementByTaskAndList({ workspaceId, taskId, listId: fromListId });
-                      }
-                      setLastUngroupedListId(list.id);
-                      await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
-                      await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-                    } catch (err) {
-                      // eslint-disable-next-line no-console
-                      console.error("[DnD] drop failed", err);
-                    }
-                  }}
+                  onTaskDrop={(taskId, fromListId) => handleTaskDrop(taskId, list.id, fromListId)}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -1091,7 +1131,7 @@ export function BoardPage() {
                           onConfirm={async (next) => {
                             await updateTaskList({
                               id: list.id,
-                              description: next.trim().length ? next.trim() : null
+                              title: next.trim().length ? next.trim() : list.title
                             });
                             await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
                           }}
@@ -1116,8 +1156,8 @@ export function BoardPage() {
                     </div>
                   </div>
                   <div className="mt-4 space-y-3">
-                    {listTasks.map((t) => (
-                      <TaskCard
+                    {listTasks.filter(t => t.status !== "done").map((t) => (
+                      <DraggableTask
                         key={t.id}
                         task={t}
                         fromListId={list.id}
@@ -1136,7 +1176,24 @@ export function BoardPage() {
                       </div>
                     ) : null}
                   </div>
-                </Card>
+                  <DoneSection
+                    tasks={listTasks.filter((t) => t.status === "done")}
+                    renderTask={(t) => (
+                      <DraggableTask
+                        key={t.id}
+                        task={t}
+                        fromListId={list.id}
+                        onClick={() => {
+                          setDrawerMode("edit");
+                          setActiveTaskId(t.id);
+                          setDrawerOpen(true);
+                          setLastUngroupedListId(list.id);
+                        }}
+                        display={display}
+                      />
+                    )}
+                  />
+                </DroppableListCard>
               );
             })}
             {ungroupedLists.length < 3 ? (
@@ -1182,36 +1239,36 @@ export function BoardPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                      <InlineEditableText
-                        value={group.title}
-                        ariaLabel={`Rename group ${group.title}`}
-                        className="block w-full text-lg font-semibold text-slate-900"
-                        inputClassName="h-9 text-lg font-semibold"
-                        onConfirm={async (next) => {
-                          await updateTaskGroup({ id: group.id, title: next });
-                          await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-                        }}
-                      />
-                      <InlineEditableText
-                        value={group.description ?? ""}
-                        placeholder="Add group description…"
-                        ariaLabel="Edit group description"
-                        allowEmpty
-                        truncate={false}
-                        className="mt-1 block w-full text-sm text-slate-500 whitespace-normal"
-                        inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
-                        onConfirm={async (next) => {
-                          await updateTaskGroup({
-                            id: group.id,
-                            description: next.trim().length ? next.trim() : null
-                          });
-                          await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-                        }}
-                      />
-                      <div className="mt-1 text-xs text-slate-400">
-                        {groupLists.length} {groupLists.length === 1 ? "list" : "lists"} • {groupVisibleTaskCount}{" "}
-                        {groupVisibleTaskCount === 1 ? "task" : "tasks"}
-                      </div>
+                    <InlineEditableText
+                      value={group.title}
+                      ariaLabel={`Rename group ${group.title}`}
+                      className="block w-full text-lg font-semibold text-slate-900"
+                      inputClassName="h-9 text-lg font-semibold"
+                      onConfirm={async (next) => {
+                        await updateTaskGroup({ id: group.id, title: next });
+                        await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+                      }}
+                    />
+                    <InlineEditableText
+                      value={group.description ?? ""}
+                      placeholder="Add group description…"
+                      ariaLabel="Edit group description"
+                      allowEmpty
+                      truncate={false}
+                      className="mt-1 block w-full text-sm text-slate-500 whitespace-normal"
+                      inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
+                      onConfirm={async (next) => {
+                        await updateTaskGroup({
+                          id: group.id,
+                          description: next.trim().length ? next.trim() : null
+                        });
+                        await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+                      }}
+                    />
+                    <div className="mt-1 text-xs text-slate-400">
+                      {groupLists.length} {groupLists.length === 1 ? "list" : "lists"} • {groupVisibleTaskCount}{" "}
+                      {groupVisibleTaskCount === 1 ? "task" : "tasks"}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1265,139 +1322,126 @@ export function BoardPage() {
                 {isCollapsed ? null : (
                   <div className="mt-4">
                     <HorizontalScrollRow dotCount={groupLists.length}>
-                    {groupLists.map((list) => {
-                      const listPlacements = placementsByList.get(list.id) ?? [];
-                      const listTasks = listPlacements
-                        .map((p) => tasksById.get(p.taskId))
-                        .filter((t): t is Task => t != null && filteredTaskIdSet.has(t.id));
-                      const count = listTasks.length;
+                      {groupLists.map((list) => {
+                        const listPlacements = placementsByList.get(list.id) ?? [];
+                        const listTasks = listPlacements
+                          .map((p) => tasksById.get(p.taskId))
+                          .filter((t): t is Task => t != null && filteredTaskIdSet.has(t.id));
+                        const count = listTasks.length;
 
-                      const person =
-                        list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
+                        const person =
+                          list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
 
-                      return (
-                        <Card
-                          key={list.id}
-                          className="w-[320px] shrink-0 p-4"
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={async (e) => {
-                            e.preventDefault();
-                            const raw = e.dataTransfer.getData(DND_MIME);
-                            const payload: DragPayload | null = raw ? JSON.parse(raw) : null;
-                            const taskId = payload?.taskId ?? e.dataTransfer.getData("text/plain");
-                            if (!taskId) return;
-
-                            try {
-                              // Default is MOVE: remove the placement from the source list unless ⌥ is held (COPY).
-                              if (!e.altKey && payload?.fromListId && payload.fromListId !== list.id) {
-                                await deleteTaskPlacementByTaskAndList({
-                                  workspaceId,
-                                  taskId,
-                                  listId: payload.fromListId
-                                });
-                              }
-                              // Ensure the task is placed in this list (multi-placement allowed).
-                              await createTaskPlacement({
-                                workspaceId,
-                                taskId,
-                                listId: list.id,
-                                createdBy: session.user.id
-                              });
-                              // Maintain legacy task semantics for now.
+                        return (
+                          <DroppableListCard
+                            key={list.id}
+                            listId={list.id}
+                            className="w-[320px] shrink-0 p-4"
+                            onTaskDrop={(taskId, fromListId) => {
+                              const person = list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
                               if (list.type === "person" && person) {
-                                await updateTask({ id: taskId, assigneeId: person.id, location: "board" });
-                              } else {
-                                await updateTask({ id: taskId, location: "board" });
+                                updateTask({ id: taskId, assigneeId: person.id, location: "board" });
                               }
-                              await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
-                              await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-                            } catch (err) {
-                              // eslint-disable-next-line no-console
-                              console.error("[DnD] drop failed", err);
-                            }
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                              {person ? (
-                                <Avatar name={person.name} src={person.avatarUrl} className="h-8 w-8 text-xs" />
-                              ) : (
-                                <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
-                                  {list.type === "project" ? "P" : list.type === "time_slot" ? "T" : "L"}
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <InlineEditableText
-                                  value={list.title}
-                                  ariaLabel={`Rename list ${list.title}`}
-                                  className="block w-full font-semibold text-slate-900"
-                                  onConfirm={async (next) => {
-                                    await updateTaskList({ id: list.id, title: next });
-                                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                                  }}
-                                />
-                                <InlineEditableText
-                                  value={list.description ?? ""}
-                                  placeholder="Add list description…"
-                                  ariaLabel="Edit list description"
-                                  allowEmpty
-                                  truncate={false}
-                                  className="mt-1 block w-full text-xs text-slate-500 whitespace-normal"
-                                  inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
-                                  onConfirm={async (next) => {
-                                    await updateTaskList({
-                                      id: list.id,
-                                      description: next.trim().length ? next.trim() : null
-                                    });
-                                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                                  }}
-                                />
+                              handleTaskDrop(taskId, list.id, fromListId);
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2">
                                 {person ? (
-                                  <div className="mt-1 text-xs text-slate-400">Person: {person.name}</div>
-                                ) : null}
+                                  <Avatar name={person.name} src={person.avatarUrl} className="h-8 w-8 text-xs" />
+                                ) : (
+                                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                                    {list.type === "project" ? "P" : list.type === "time_slot" ? "T" : "L"}
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <InlineEditableText
+                                    value={list.title}
+                                    ariaLabel={`Rename list ${list.title}`}
+                                    className="block w-full font-semibold text-slate-900"
+                                    onConfirm={async (next) => {
+                                      await updateTaskList({ id: list.id, title: next });
+                                      await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                                    }}
+                                  />
+                                  <InlineEditableText
+                                    value={list.description ?? ""}
+                                    placeholder="Add list description…"
+                                    ariaLabel="Edit list description"
+                                    allowEmpty
+                                    truncate={false}
+                                    className="mt-1 block w-full text-xs text-slate-500 whitespace-normal"
+                                    inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
+                                    onConfirm={async (next) => {
+                                      await updateTaskList({
+                                        id: list.id,
+                                        description: next.trim().length ? next.trim() : null
+                                      });
+                                      await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                                    }}
+                                  />
+                                  {person ? (
+                                    <div className="mt-1 text-xs text-slate-400">Person: {person.name}</div>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-slate-500">
+                                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
+                                  {count}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  aria-label="List actions"
+                                  title="Delete list"
+                                  onClick={() => {
+                                    setListModal({ mode: "delete", id: list.id, title: list.title });
+                                  }}
+                                >
+                                  <MoreHorizontal size={18} />
+                                </Button>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                              <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
-                                {count}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                aria-label="List actions"
-                                title="Delete list"
-                                onClick={() => {
-                                  setListModal({ mode: "delete", id: list.id, title: list.title });
-                                }}
-                              >
-                                <MoreHorizontal size={18} />
-                              </Button>
-                            </div>
-                          </div>
 
-                          <div className="mt-4 space-y-3">
-                            {listTasks.map((t) => (
-                              <TaskCard
-                                key={t.id}
-                                task={t}
-                                fromListId={list.id}
-                                onClick={() => {
-                                  setDrawerMode("edit");
-                                  setActiveTaskId(t.id);
-                                  setDrawerOpen(true);
-                                }}
-                                display={display}
-                              />
-                            ))}
-                            {count === 0 ? (
-                              <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                                No tasks yet
-                              </div>
-                            ) : null}
-                          </div>
-                        </Card>
-                      );
-                    })}
+                            <div className="mt-4 space-y-3">
+                              {listTasks.filter(t => t.status !== "done").map((t) => (
+                                <DraggableTask
+                                  key={t.id}
+                                  task={t}
+                                  fromListId={list.id}
+                                  onClick={() => {
+                                    setDrawerMode("edit");
+                                    setActiveTaskId(t.id);
+                                    setDrawerOpen(true);
+                                  }}
+                                  display={display}
+                                />
+                              ))}
+                              {count === 0 ? (
+                                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                                  No tasks yet
+                                </div>
+                              ) : null}
+                            </div>
+                            <DoneSection
+                              tasks={listTasks.filter((t) => t.status === "done")}
+                              renderTask={(t) => (
+                                <DraggableTask
+                                  key={t.id}
+                                  task={t}
+                                  fromListId={list.id}
+                                  onClick={() => {
+                                    setDrawerMode("edit");
+                                    setActiveTaskId(t.id);
+                                    setDrawerOpen(true);
+                                  }}
+                                  display={display}
+                                />
+                              )}
+                            />
+                          </DroppableListCard>
+                        );
+                      })}
                     </HorizontalScrollRow>
                   </div>
                 )}
@@ -1411,61 +1455,50 @@ export function BoardPage() {
         mode={drawerMode}
         task={activeTask}
         profiles={profiles}
-        participants={activeParticipants as TaskParticipant[]}
-        onAddMember={async (input) => {
-          const profile = await createMemberPlaceholder({
-            workspaceId,
-            name: input.name,
-            email: input.email ?? null,
-            status: input.sendInvite ? "invited" : "active",
-            role: "member"
-          });
-          if (input.sendInvite && input.email && input.email.trim().length) {
-            await createInvite({
-              workspaceId,
-              email: input.email.trim(),
-              role: "member",
-              createdBy: session.user.id as any
-            });
-          }
-          await qc.invalidateQueries({ queryKey: ["profiles", workspaceId] });
-          return profile;
-        }}
+        currentUserId={session.user.id}
+        lists={lists}
         onClose={closeTaskDrawer}
         onSave={async (values) => {
+          let listIdToUse = values.listId;
+          let locationToUse = values.location;
+
+          // If a new list was typed into the TaskDrawer combobox, create it first.
+          if (values.newListName) {
+            const newList = await createTaskList({
+              workspaceId,
+              groupId: null,
+              type: "other",
+              title: values.newListName
+            });
+            listIdToUse = newList.id;
+            locationToUse = "board";
+            await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+          }
+
           if (drawerMode === "create") {
+            // Respect the BoardPage context if "Add Task" was clicked from a specific column hook
+            if (createTargetListId && !listIdToUse && locationToUse !== "inbox") {
+              listIdToUse = createTargetListId;
+              locationToUse = "board";
+            }
+
             const created = await createTask({
               workspaceId,
               createdBy: session.user.id,
               title: values.title,
               priority: values.priority,
-              // Tasks created from the workspace page should live on the workspace canvas (board),
-              // unless explicitly set otherwise from the drawer.
-              location: createTargetListId ? "board" : values.location,
+              location: locationToUse,
               dueDate: values.dueDate ?? undefined,
               assigneeId: values.assigneeId
             });
-            if (values.watcherIds.length) {
-              await Promise.all(
-                values.watcherIds.map((profileId) =>
-                  upsertTaskParticipant({
-                    workspaceId,
-                    taskId: created.id,
-                    profileId,
-                    role: "watcher",
-                    createdBy: session.user.id
-                  })
-                )
-              );
-              await qc.invalidateQueries({ queryKey: ["taskParticipants", workspaceId] });
-            }
-            // If created directly onto the board, ensure it has at least one placement so it renders.
+
             if (created.location === "board") {
               const list =
-                (createTargetListId ? lists.find((l) => l.id === createTargetListId) ?? null : null) ??
+                (listIdToUse ? lists.find((l) => l.id === listIdToUse) ?? { id: listIdToUse, groupId: null, type: "other", title: values.newListName ?? "", sortOrder: 0, workspaceId } : null) ??
                 (created.assigneeId ? personListByProfileId.get(created.assigneeId) : null) ??
                 lists.find((l) => l.groupId && l.type === "person") ??
                 null;
+
               if (list) {
                 await createTaskPlacement({
                   workspaceId,
@@ -1489,46 +1522,62 @@ export function BoardPage() {
               title: values.title,
               priority: values.priority,
               dueDate: values.dueDate ?? null,
-              location: values.location,
+              location: locationToUse,
               assigneeId: values.assigneeId
             });
-            // Apply watcher diffs on save (Cancel should discard local edits).
-            const prevWatcherIds = new Set(
-              (activeParticipants ?? []).filter((p) => p.role === "watcher").map((p) => p.profileId)
-            );
-            const nextWatcherIds = new Set(values.watcherIds);
-            const toAdd = Array.from(nextWatcherIds).filter((id) => !prevWatcherIds.has(id));
-            const toRemove = Array.from(prevWatcherIds).filter((id) => !nextWatcherIds.has(id));
-            if (toAdd.length || toRemove.length) {
-              await Promise.all([
-                ...toAdd.map((profileId) =>
-                  upsertTaskParticipant({
-                    workspaceId,
-                    taskId: activeTask.id,
-                    profileId,
-                    role: "watcher",
-                    createdBy: session.user.id
-                  })
-                ),
-                ...toRemove.map((profileId) =>
-                  removeTaskParticipant({
-                    workspaceId,
-                    taskId: activeTask.id,
-                    profileId
-                  })
-                )
-              ]);
-              await qc.invalidateQueries({ queryKey: ["taskParticipants", workspaceId] });
+
+            // Handle moving to a new list or inbox if list was explicitly picked
+            if (listIdToUse && listIdToUse !== "inbox") {
+              const ps = placements.filter((p) => p.taskId === activeTask.id);
+              const inboxId = inboxList?.id ?? null;
+
+              if (inboxId && ps.some(p => p.listId === inboxId)) {
+                await deleteTaskPlacementByTaskAndList({
+                  workspaceId, taskId: activeTask.id, listId: inboxId
+                });
+              }
+
+              const singleNonInbox = ps.filter(p => p.listId !== inboxId)[0];
+              if (singleNonInbox && singleNonInbox.listId !== listIdToUse) {
+                await deleteTaskPlacementByTaskAndList({
+                  workspaceId, taskId: activeTask.id, listId: singleNonInbox.listId
+                });
+              }
+
+              if (!ps.some(p => p.listId === listIdToUse)) {
+                await createTaskPlacement({
+                  workspaceId, taskId: activeTask.id, listId: listIdToUse, createdBy: session.user.id
+                });
+              }
+              await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+            } else if (locationToUse === "inbox" && activeTask.location !== "inbox") {
+              const ps = placements.filter((p) => p.taskId === activeTask.id);
+              const inboxId = inboxList?.id ?? null;
+              for (const p of ps) {
+                if (p.listId !== inboxId) {
+                  await deleteTaskPlacementByTaskAndList({
+                    workspaceId, taskId: activeTask.id, listId: p.listId
+                  });
+                }
+              }
+              if (inboxId && !ps.some(p => p.listId === inboxId)) {
+                await createTaskPlacement({
+                  workspaceId, taskId: activeTask.id, listId: inboxId, createdBy: session.user.id
+                });
+              }
+              await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
             }
-            await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
-            closeTaskDrawer();
+
+            await qc.invalidateQueries({ queryKey: ["taskParticipants", workspaceId] });
           }
+          await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+          closeTaskDrawer();
         }}
         onDelete={
           drawerMode === "edit" && activeTask
             ? () => {
-                setConfirmDeleteOpen(true);
-              }
+              setConfirmDeleteOpen(true);
+            }
             : undefined
         }
       />
@@ -1576,7 +1625,7 @@ export function BoardPage() {
               <Button
                 className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
                 onClick={async () => {
-                  await deleteWorkspace({ id: workspaceModal.id as any });
+                  await deleteWorkspace(workspaceModal.id as any);
                   await qc.invalidateQueries({ queryKey: ["workspaces"] });
                   // If you deleted the active workspace, go to demo (or first available).
                   nav("/w/demo/board");
@@ -1612,7 +1661,7 @@ export function BoardPage() {
                 <Button
                   className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
                   onClick={async () => {
-                    await deleteTaskGroup({ id: groupModal.id });
+                    await deleteTaskGroup(groupModal.id);
                     await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
                     await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
                     setGroupModal(null);
@@ -1625,13 +1674,17 @@ export function BoardPage() {
                   onClick={async () => {
                     const title = groupTitleDraft.trim();
                     const description = groupDescDraft.trim().length ? groupDescDraft.trim() : null;
-                    if (groupModal.mode === "create") {
-                      await createTaskGroup({ workspaceId, title, description });
-                    } else {
-                      await updateTaskGroup({ id: groupModal.id, title, description });
+                    try {
+                      if (groupModal.mode === "create") {
+                        await createTaskGroup({ workspaceId, title, description });
+                      } else {
+                        await updateTaskGroup({ id: groupModal.id, title, description });
+                      }
+                      await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+                      setGroupModal(null);
+                    } catch (err: any) {
+                      alert(`Error saving group: ${err.message}`);
                     }
-                    await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-                    setGroupModal(null);
                   }}
                   disabled={!groupTitleDraft.trim().length}
                 >
@@ -1699,7 +1752,7 @@ export function BoardPage() {
                 <Button
                   className="bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
                   onClick={async () => {
-                    await deleteTaskList({ id: listModal.id });
+                    await deleteTaskList(listModal.id);
                     await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
                     await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
                     setListModal(null);
@@ -1711,18 +1764,22 @@ export function BoardPage() {
                 <Button
                   onClick={async () => {
                     const title = listTitleDraft.trim();
-                    if (listModal.mode === "create") {
-                      await createTaskList({
-                        workspaceId,
-                        groupId: listModal.groupId,
-                        type: listTypeDraft,
-                        title
-                      });
-                    } else {
-                      await updateTaskList({ id: listModal.id, title });
+                    try {
+                      if (listModal.mode === "create") {
+                        await createTaskList({
+                          workspaceId,
+                          groupId: listModal.groupId,
+                          type: listTypeDraft,
+                          title
+                        });
+                      } else {
+                        await updateTaskList({ id: listModal.id, title });
+                      }
+                      await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                      setListModal(null);
+                    } catch (err: any) {
+                      alert(`Error saving list: ${err.message}`);
                     }
-                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                    setListModal(null);
                   }}
                   disabled={!listTitleDraft.trim().length}
                 >
@@ -1818,7 +1875,7 @@ export function BoardPage() {
                     const profile = await createMemberPlaceholder({
                       workspaceId,
                       name: unknownMemberNameDraft.trim(),
-                      email: unknownMemberEmailDraft.trim().length ? unknownMemberEmailDraft.trim() : null,
+                      email: unknownMemberEmailDraft.trim().length ? unknownMemberEmailDraft.trim() : undefined,
                       status: unknownMemberSendInvite ? "invited" : "active",
                       role: "member"
                     });
@@ -1973,56 +2030,6 @@ function StatPill({
   );
 }
 
-function TaskCard({
-  task,
-  fromListId,
-  onClick,
-  display
-}: {
-  task: Task;
-  fromListId: string;
-  onClick: () => void;
-  display: DisplayPrefs;
-}) {
-  const due = formatDueDate(task.dueDate);
-
-  return (
-    <button
-      className="w-full text-left rounded-xl border border-slate-200 bg-white p-3 shadow-sm hover:shadow-card transition-shadow"
-      onClick={onClick}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData("text/plain", task.id);
-        e.dataTransfer.setData(DND_MIME, JSON.stringify({ taskId: task.id, fromListId } satisfies DragPayload));
-        // Allow ⌥-drag behaviors (browsers often flip to "copy" when Alt/Option is held).
-        // We still treat this as a move in-app; ⌥ is used as a modifier (e.g. keep assignee).
-        e.dataTransfer.effectAllowed = "copyMove";
-      }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-sm font-medium text-slate-900 line-clamp-2">{task.title}</div>
-        {display.showPriority ? (
-          <Badge variant={priorityVariant(task.priority)} className="shrink-0">
-            {task.priority === "critical"
-              ? "Critical"
-              : task.priority[0]!.toUpperCase() + task.priority.slice(1)}
-          </Badge>
-        ) : null}
-      </div>
-
-      {display.showDueDate || display.showChecklist || display.showComments ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {display.showDueDate && due ? <StatPill>📅 {due}</StatPill> : null}
-          {display.showChecklist ? (
-            <StatPill>
-              ☑️ {task.checklist.done}/{task.checklist.total}
-            </StatPill>
-          ) : null}
-          {display.showComments ? <StatPill>💬 {task.commentsCount}</StatPill> : null}
-        </div>
-      ) : null}
-    </button>
-  );
-}
+// Removed old TaskCard in favor of DraggableTask component
 
 
