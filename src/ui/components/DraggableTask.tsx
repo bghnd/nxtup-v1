@@ -43,7 +43,7 @@ export function DraggableTask({
     display
 }: {
     task: Task;
-    fromListId: string;
+    fromListId: string | null;
     onClick: () => void;
     display: DisplayPrefs;
 }) {
@@ -56,7 +56,8 @@ export function DraggableTask({
             return {
                 id: task.id,
                 [DND_MIME]: JSON.stringify(payload),
-                "text/plain": task.id
+                "text/plain": task.id,
+                ...payload // Also spread for react-dnd consumers
             };
         },
         collect: (monitor) => ({

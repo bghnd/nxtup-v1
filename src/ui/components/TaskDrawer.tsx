@@ -1,5 +1,5 @@
 import React from "react";
-import type { Priority, Profile, Task, TaskLocation, TaskList } from "../../domain/types";
+import type { Priority, Profile, Task, TaskLocation, TaskList, TaskGroup } from "../../domain/types";
 import { cn } from "../lib/cn";
 import { Button } from "./Button";
 import { Input } from "./Input";
@@ -15,6 +15,9 @@ export function TaskDrawer({
   profiles,
   currentUserId,
   lists = [],
+  groups = [],
+  createTargetListId = null,
+  createTargetUnlistedGroupId = undefined,
   onClose,
   onSave,
   onDelete
@@ -25,6 +28,9 @@ export function TaskDrawer({
   profiles: Profile[];
   currentUserId: string;
   lists?: TaskList[];
+  groups?: TaskGroup[];
+  createTargetListId?: string | null;
+  createTargetUnlistedGroupId?: string | null | undefined;
   onClose: () => void;
   onSave: (values: {
     title: string;
@@ -77,21 +83,46 @@ export function TaskDrawer({
     setTitle("");
     setPriority("medium");
     setDueDate("");
-    setLocation("inbox");
+
+    const targetList = createTargetListId && lists ? lists.find(l => l.id === createTargetListId) : null;
+    const isUnlisted = createTargetUnlistedGroupId !== undefined;
+    let unlistedLabel = "Board";
+    if (isUnlisted) {
+      if (createTargetUnlistedGroupId === null) {
+        unlistedLabel = "workspace: Ungrouped";
+      } else {
+        const group = groups?.find(g => g.id === createTargetUnlistedGroupId);
+        unlistedLabel = group ? `${group.title}: Unlisted` : "Group: Unlisted";
+      }
+    }
+
+    setLocation(isUnlisted ? "board" : (targetList ? (targetList.type === "inbox" ? "inbox" : "board") : "inbox"));
     setAssigneeId(currentUserId);
-    setLocationSearch("Inbox");
-    setSelectedListId(null);
+    setLocationSearch(isUnlisted ? unlistedLabel : (targetList ? targetList.title : "Inbox"));
+    setSelectedListId(isUnlisted ? null : (createTargetListId || null));
     setNewListName(null);
     setIsFocused(false);
-  }, [open, mode, task, profiles, currentUserId]);
+  }, [open, mode, task, profiles, currentUserId, createTargetListId, lists]);
 
   const displayLocation = React.useMemo(() => {
     if (isFocused) return locationSearch;
     if (location === "inbox") return "Inbox";
     if (selectedListId) return lists?.find(l => l.id === selectedListId)?.title ?? "Board";
     if (newListName) return newListName;
+
+    // Fallback UI display for unlisted locations when no list is selected
+    const isUnlisted = createTargetUnlistedGroupId !== undefined;
+    if (isUnlisted && location === "board") {
+      if (createTargetUnlistedGroupId === null) {
+        return "workspace: Ungrouped";
+      } else {
+        const group = groups?.find(g => g.id === createTargetUnlistedGroupId);
+        return group ? `${group.title}: Unlisted` : "Group: Unlisted";
+      }
+    }
+
     return "Board";
-  }, [isFocused, locationSearch, location, selectedListId, newListName, lists]);
+  }, [isFocused, locationSearch, location, selectedListId, newListName, lists, createTargetUnlistedGroupId, groups]);
 
   if (!open) return null;
 
@@ -129,7 +160,7 @@ export function TaskDrawer({
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} />
               </Field>
 
-              <Field label="Location">
+              <Field label="List">
                 <div className="relative">
                   <Input
                     value={displayLocation}
@@ -157,7 +188,8 @@ export function TaskDrawer({
                     <div className="absolute top-full left-0 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg z-10">
                       <div
                         className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                        onMouseDown={() => {
+                        onPointerDown={(e) => {
+                          e.preventDefault();
                           setLocation("inbox");
                           setLocationSearch("Inbox");
                           setSelectedListId(null);
@@ -169,21 +201,27 @@ export function TaskDrawer({
                       </div>
                       {lists
                         .filter((l) => l.title.toLowerCase().includes(locationSearch.toLowerCase()))
-                        .map((list) => (
-                          <div
-                            key={list.id}
-                            className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                            onMouseDown={() => {
-                              setLocation("board");
-                              setLocationSearch(list.title);
-                              setSelectedListId(list.id);
-                              setNewListName(null);
-                              setLocationMenuOpen(false);
-                            }}
-                          >
-                            {list.title}
-                          </div>
-                        ))}
+                        .map((list) => {
+                          const group = groups?.find(g => g.id === list.groupId);
+                          const groupName = group ? group.title : "Ungrouped";
+                          return (
+                            <div
+                              key={list.id}
+                              className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center justify-between"
+                              onPointerDown={(e) => {
+                                e.preventDefault();
+                                setLocation("board");
+                                setLocationSearch(list.title);
+                                setSelectedListId(list.id);
+                                setNewListName(null);
+                                setLocationMenuOpen(false);
+                              }}
+                            >
+                              <span>{list.title}</span>
+                              <span className="text-xs text-slate-400 max-w-[50%] truncate">{groupName}</span>
+                            </div>
+                          )
+                        })}
                       {locationSearch.trim().length > 0 &&
                         !lists.some(
                           (l) => l.title.toLowerCase() === locationSearch.trim().toLowerCase()
@@ -191,7 +229,8 @@ export function TaskDrawer({
                         locationSearch.trim().toLowerCase() !== "inbox" && (
                           <div
                             className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
-                            onMouseDown={() => {
+                            onPointerDown={(e) => {
+                              e.preventDefault();
                               setLocation("board");
                               setNewListName(locationSearch.trim());
                               setSelectedListId(null);
@@ -264,7 +303,7 @@ export function TaskDrawer({
                 </Button>
                 <Button
                   disabled={!canSave}
-                  onClick={() =>
+                  onClick={() => {
                     onSave({
                       title: title.trim(),
                       priority,
@@ -273,8 +312,8 @@ export function TaskDrawer({
                       assigneeId: assigneeId.length ? assigneeId : null,
                       listId: selectedListId,
                       newListName: newListName
-                    })
-                  }
+                    });
+                  }}
                 >
                   Save
                 </Button>

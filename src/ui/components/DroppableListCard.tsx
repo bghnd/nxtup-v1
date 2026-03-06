@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useDrop } from "react-dnd";
+import { useDrop, useDrag } from "react-dnd";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardProps } from "./Card";
 import { cn } from "../lib/cn";
@@ -9,12 +9,16 @@ const DND_MIME = "application/x-nxtup-task";
 
 export function DroppableListCard({
     listId,
+    listGroupId,
+    isDraggable,
     onTaskDrop,
     className,
     children,
     ...props
 }: CardProps & {
     listId: string;
+    listGroupId?: string | null;
+    isDraggable?: boolean;
     onTaskDrop: (taskId: string, fromListId: string | null) => void;
 }) {
     const [{ isOver }, dropRef] = useDrop({
@@ -29,10 +33,27 @@ export function DroppableListCard({
         })
     });
 
+    const [{ isDragging }, dragRef] = useDrag({
+        type: "LIST",
+        item: () => ({ listId, listGroupId }),
+        canDrag: () => !!isDraggable,
+        collect: (monitor) => ({
+            isDragging: monitor.isDragging()
+        })
+    });
+
+    // Combine refs to support both behaviors on the root element
+    const combineRefs = (el: HTMLDivElement | null) => {
+        dropRef(el);
+        if (isDraggable) {
+            dragRef(el);
+        }
+    };
+
     return (
         <Card
-            ref={dropRef as any}
-            className={cn(className, isOver && "ring-2 ring-blue-400 bg-blue-50/50 transition-colors")}
+            ref={combineRefs as any}
+            className={cn(className, isOver && "ring-2 ring-blue-400 bg-blue-50/50 transition-colors", isDragging && "opacity-50 border-blue-400 border-dashed")}
             {...props}
         >
             {children}

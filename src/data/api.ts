@@ -176,6 +176,7 @@ export type CreateTaskInput = {
   title: string;
   priority: Priority;
   location: TaskLocation;
+  groupId?: string | null;
   dueDate?: string;
   assigneeId?: ProfileId | null;
   tags?: string[];
@@ -190,6 +191,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     id,
     workspaceId: input.workspaceId,
     location: input.location,
+    groupId: input.groupId ?? null,
     title: input.title.trim() || "Untitled task",
     priority: input.priority,
     dueDate: input.dueDate,
@@ -208,6 +210,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 export type UpdateTaskInput = {
   id: TaskId;
   location?: TaskLocation;
+  groupId?: string | null;
   title?: string;
   priority?: Priority;
   dueDate?: string | null;
@@ -224,6 +227,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<Task> {
   const next: Task = {
     ...prev,
     location: input.location ?? prev.location,
+    groupId: input.groupId !== undefined ? input.groupId : prev.groupId,
     title: input.title !== undefined ? input.title : prev.title,
     priority: input.priority ?? prev.priority,
     dueDate:

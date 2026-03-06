@@ -42,15 +42,16 @@ function mapProfile(row: any): Profile {
 function mapTask(row: any): Task {
   return {
     id: row.id,
-    workspaceId: row.workspaceId,
+    workspaceId: row.workspaceId || row.workspace_id,
     location: row.location as Task["location"],
+    groupId: row.group_id ?? null,
     title: row.title,
     description: row.description,
     priority: row.priority as Task["priority"],
-    dueDate: row.dueDate,
-    assigneeId: row.assigneeId,
-    createdBy: row.createdBy,
-    updatedAt: row.updatedAt,
+    dueDate: row.dueDate || row.due_date,
+    assigneeId: row.assigneeId || row.assignee_id,
+    createdBy: row.createdBy || row.created_by,
+    updatedAt: row.updatedAt || row.updated_at,
     checklist: { total: 0, done: 0 },
     commentsCount: 0,
     status: (row as any).status || "active",
@@ -337,6 +338,7 @@ export const supabaseAdapter: DataAdapter = {
       .insert({
         workspace_id: input.workspaceId,
         location: input.location,
+        group_id: input.groupId ?? null,
         title: input.title,
         description: null,
         priority: input.priority,
@@ -355,6 +357,7 @@ export const supabaseAdapter: DataAdapter = {
     assertEnv();
     const patch: any = {};
     if (input.location !== undefined) patch.location = input.location;
+    if (input.groupId !== undefined) patch.group_id = input.groupId === null ? null : input.groupId;
     if (input.title !== undefined) patch.title = input.title;
     if (input.priority !== undefined) patch.priority = input.priority;
     if (input.dueDate !== undefined) patch.due_date = input.dueDate === null ? null : input.dueDate;
@@ -368,6 +371,255 @@ export const supabaseAdapter: DataAdapter = {
     assertEnv();
     const { error } = await supabase.from("tasks").delete().eq("id", id);
     if (error) throw error;
+  },
+
+  async createWorkspace(input) {
+    assertEnv();
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) throw new Error("Not authenticated");
+    const userId = session.session.user.id;
+
+    const { data, error } = await supabase
+      .from("workspaces")
+      .insert({ name: input.name.trim() || "Untitled Workspace", created_by: userId })
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    // Typically a Postgres trigger handles member creation, but we explicitly add them here for MVP
+    await supabase.from("workspace_members").insert({
+      workspace_id: data.id,
+      profile_id: userId,
+      role: "owner",
+      status: "active"
+    });
+
+    return mapWorkspace(data);
+  },
+
+  async updateWorkspace(input) {
+    assertEnv();
+    const patch: any = {};
+    if (input.name !== undefined) patch.name = input.name;
+    if (input.description !== undefined) patch.description = input.description;
+
+    const { data, error } = await supabase
+      .from("workspaces")
+      .update(patch)
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapWorkspace(data);
+  },
+
+  async deleteWorkspace(id) {
+    assertEnv();
+    const { error } = await supabase.from("workspaces").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  async updateTaskGroup(input) {
+    assertEnv();
+    const patch: any = {};
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.description !== undefined) patch.description = input.description;
+
+    const { data, error } = await supabase
+      .from("task_groups")
+      .update(patch)
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapGroup(data);
+  },
+
+  async deleteTaskGroup(id) {
+    assertEnv();
+    // Assuming DB has ON DELETE CASCADE or ON DELETE SET NULL for lists. If not, we nullify them.
+    await supabase.from("task_lists").update({ group_id: null }).eq("group_id", id);
+    const { error } = await supabase.from("task_groups").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  async updateTaskList(input) {
+    assertEnv();
+    const patch: any = {};
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.description !== undefined) patch.description = input.description;
+    if (input.groupId !== undefined) patch.group_id = input.groupId;
+
+    const { data, error } = await supabase
+      .from("task_lists")
+      .update(patch)
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapList(data);
+  },
+
+  async deleteTaskList(id) {
+    assertEnv();
+    // Assuming task_placements cascades. If not, delete placements first.
+    await supabase.from("task_placements").delete().eq("list_id", id);
+    const { error } = await supabase.from("task_lists").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  async listTaskParticipants(workspaceId) {
+    assertEnv();
+    const { data, error } = await supabase
+      .from("task_participants")
+      .select("*")
+      .eq("workspace_id", workspaceId);
+    if (error) throw error;
+    return (data ?? []).map((r: any) => ({
+      id: r.id,
+      workspaceId: r.workspace_id,
+      taskId: r.task_id,
+      profileId: r.profile_id,
+      role: r.role,
+      createdBy: r.created_by,
+      createdAt: r.created_at
+    }));
+  },
+
+  async upsertTaskParticipant(input) {
+    assertEnv();
+    const { data, error } = await supabase
+      .from("task_participants")
+      .upsert({
+        workspace_id: input.workspaceId,
+        task_id: input.taskId,
+        profile_id: input.profileId,
+        role: input.role,
+        created_by: input.createdBy
+      }, { onConflict: "workspace_id,task_id,profile_id" })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      workspaceId: data.workspace_id,
+      taskId: data.task_id,
+      profileId: data.profile_id,
+      role: data.role,
+      createdBy: data.created_by,
+      createdAt: data.created_at
+    };
+  },
+
+  async removeTaskParticipant(input) {
+    assertEnv();
+    const { error } = await supabase
+      .from("task_participants")
+      .delete()
+      .eq("workspace_id", input.workspaceId)
+      .eq("task_id", input.taskId)
+      .eq("profile_id", input.profileId);
+    if (error) throw error;
+  },
+
+  async createMemberPlaceholder(input) {
+    assertEnv();
+    const { data, error } = await supabase
+      .from("profiles")
+      .insert({
+        name: input.name.trim() || "Unknown",
+        email: input.email?.trim() || null
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    // Add them to the workspace
+    await supabase.from("workspace_members").insert({
+      workspace_id: input.workspaceId,
+      profile_id: data.id,
+      role: input.role ?? "member",
+      status: input.status ?? "invited"
+    });
+
+    return mapProfile(data);
+  },
+
+  async setMemberRole(input) {
+    assertEnv();
+    const { error } = await supabase
+      .from("workspace_members")
+      .update({ role: input.role })
+      .eq("workspace_id", input.workspaceId)
+      .eq("profile_id", input.profileId);
+    if (error) throw error;
+  },
+
+  async getLastEntry(workspaceId) {
+    assertEnv();
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) return null;
+    return mapTask(data);
+  },
+
+  async duplicateTask(workspaceId, taskId, createdBy) {
+    assertEnv();
+    // 1. Fetch original task
+    const { data: original, error: fetchError } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("id", taskId)
+      .eq("workspace_id", workspaceId)
+      .single();
+    if (fetchError || !original) throw new Error("Task not found");
+
+    // 2. Insert new task
+    const { id: _oldId, created_at: _oldCreatedAt, updated_at: _oldUpdatedAt, ...taskData } = original;
+    const { data: newTask, error: insertError } = await supabase
+      .from("tasks")
+      .insert({ ...taskData, created_by: createdBy })
+      .select("*")
+      .single();
+    if (insertError) throw insertError;
+
+    // 3. Duplicate placements
+    const { data: placements } = await supabase
+      .from("task_placements")
+      .select("*")
+      .eq("task_id", taskId)
+      .eq("workspace_id", workspaceId);
+
+    if (placements && placements.length > 0) {
+      const newPlacements = placements.map(p => {
+        const { id: _pId, created_at: _pCreated, ...pData } = p;
+        return { ...pData, task_id: newTask.id, created_by: createdBy };
+      });
+      await supabase.from("task_placements").insert(newPlacements);
+    }
+
+    // 4. Duplicate participants
+    const { data: participants } = await supabase
+      .from("task_participants")
+      .select("*")
+      .eq("task_id", taskId)
+      .eq("workspace_id", workspaceId);
+
+    if (participants && participants.length > 0) {
+      const newParticipants = participants.map(p => {
+        const { id: _pId, created_at: _pCreated, ...pData } = p;
+        return { ...pData, task_id: newTask.id, created_by: createdBy };
+      });
+      await supabase.from("task_participants").insert(newParticipants);
+    }
+
+    return mapTask(newTask);
   }
 };
 

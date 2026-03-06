@@ -54,6 +54,7 @@ export type Task = {
    * UI should derive location from placements instead of relying on this.
    */
   location: TaskLocation;
+  groupId?: TaskGroupId | null; // For tasks on the board that are in a group but have no list
   title: string;
   description?: string;
   priority: Priority;

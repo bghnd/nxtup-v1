@@ -19,7 +19,21 @@ import {
   listWorkspaceMembers,
   listWorkspaces,
   updateTaskPlacement,
-  updateTask
+  updateTask,
+  createWorkspace,
+  updateWorkspace,
+  deleteWorkspace,
+  updateTaskGroup,
+  deleteTaskGroup,
+  updateTaskList,
+  deleteTaskList,
+  listTaskParticipants,
+  upsertTaskParticipant,
+  removeTaskParticipant,
+  createMemberPlaceholder,
+  setMemberRole,
+  getLastEntry,
+  duplicateTask
 } from "../api";
 
 export const mockAdapter: DataAdapter = {
@@ -42,9 +56,19 @@ export const mockAdapter: DataAdapter = {
   deleteTaskPlacementByTaskAndList,
   createTask,
   updateTask,
-  deleteTask
+  deleteTask,
+  createWorkspace,
+  updateWorkspace,
+  deleteWorkspace,
+  updateTaskGroup,
+  deleteTaskGroup,
+  updateTaskList,
+  deleteTaskList,
+  listTaskParticipants,
+  upsertTaskParticipant,
+  removeTaskParticipant,
+  createMemberPlaceholder,
+  setMemberRole,
+  getLastEntry,
+  duplicateTask
 };
-
-
-
-

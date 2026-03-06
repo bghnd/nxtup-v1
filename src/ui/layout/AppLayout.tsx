@@ -27,6 +27,7 @@ import { ContextPanel, type PanelType } from "./contextPanel/ContextPanel";
 import { InboxPanel } from "./contextPanel/InboxPanel";
 import { loadDisplayPrefs } from "../state/displayPrefs";
 import { GlobalSearchModal } from "../components/GlobalSearchModal";
+import { getUniqueName } from "../../utils/nameUtils";
 
 const COLLAPSED_KEY = "nxtup.sidebar.collapsed.v1";
 const COLLAPSE_MODE_KEY = "nxtup.sidebar.collapseMode.v1"; // "auto" | "manual"
@@ -221,73 +222,9 @@ export function AppLayout() {
 
   return (
     <div className="h-screen overflow-hidden bg-slate-50">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-4 px-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <div className="grid h-7 w-7 place-items-center rounded-md bg-blue-600 text-white">
-              N
-            </div>
-            NXTUP
-          </div>
+      {/* Top bar removed from here, moving Logo into Sidebar and Buttons into Main */}
 
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" aria-label="Notifications">
-              <Bell size={18} />
-            </Button>
-            <div
-              className={cn(
-                "hidden md:flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
-                adapterKind === "supabase"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 bg-slate-50 text-slate-700"
-              )}
-              title="Active backend for reads/writes"
-            >
-              Backend: {adapterKind === "supabase" ? "Supabase" : "Mock"}
-            </div>
-            {(import.meta.env.VITE_USE_SUPABASE as string | undefined) === "1" ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setAuthOpen(true)}
-                title={supabaseEmail ? "Supabase auth: signed in" : "Supabase auth: sign in"}
-              >
-                {supabaseEmail ? "Supabase ✓" : "Sign in"}
-              </Button>
-            ) : null}
-            <div className="flex items-center gap-2">
-              <select
-                className="hidden h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 md:block"
-                value={session.user.id}
-                onChange={(e) => setUser(e.target.value)}
-                aria-label="Switch user (stub)"
-                title="Stub auth: switch active user"
-                disabled={Boolean(supabaseEmail)}
-              >
-                {allUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="hidden h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 md:block"
-                value={session.workspaceRole}
-                onChange={(e) => setWorkspaceRole(e.target.value as any)}
-                aria-label="Switch role (stub)"
-                title="Stub auth: switch workspace role"
-                disabled={Boolean(supabaseEmail)}
-              >
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-                <option value="member">Member</option>
-              </select>
-              <Avatar name={supabaseEmail ?? session.user.name} />
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* End previous Top Bar area */}
 
       <SupabaseAuthModal
         open={authOpen}
@@ -300,7 +237,7 @@ export function AppLayout() {
 
       {/* App chrome row: rail + (optional) context panel + main content.
           Only the main content should scroll; nav layers should not. */}
-      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+      <div className="flex h-screen overflow-hidden">
         {/* Sidebar */}
         <aside
           className={cn(
@@ -308,7 +245,17 @@ export function AppLayout() {
             effectiveSidebarCollapsed ? "w-[76px] px-2" : "w-[240px] px-3"
           )}
         >
-          <div className={cn("flex items-center px-1 py-3", effectiveSidebarCollapsed ? "justify-center" : "justify-end")}>
+          {/* Logo container at the top of Sidebar */}
+          <div className={cn("flex items-center h-14 pl-1", effectiveSidebarCollapsed ? "justify-center" : "justify-start")}>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 cursor-pointer" onClick={() => nav("/")}>
+              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-blue-600 text-white">
+                N
+              </div>
+              {!effectiveSidebarCollapsed && <span>NXTUP</span>}
+            </div>
+          </div>
+
+          <div className={cn("flex items-center px-1 py-1", effectiveSidebarCollapsed ? "justify-center" : "justify-end")}>
             <Button
               variant="ghost"
               size="sm"
@@ -474,9 +421,11 @@ export function AppLayout() {
                     }
                     if (e.key !== "Enter") return;
                     e.preventDefault();
-                    const name = createWsName.trim();
-                    if (!name.length) return;
-                    const ws = await createWorkspace({ name });
+                    const nameInput = createWsName.trim();
+                    if (!nameInput.length) return;
+                    const existingNames = workspaces.map((w: any) => w.name);
+                    const finalName = getUniqueName(nameInput, existingNames);
+                    const ws = await createWorkspace({ name: finalName });
                     await qc.invalidateQueries({ queryKey: ["workspaces"] });
                     setCreateWsOpen(false);
                     setCreateWsName("");
@@ -488,7 +437,7 @@ export function AppLayout() {
             ) : null}
 
             <nav className="mt-2 space-y-1">
-              {workspaces.map((w) => {
+              {workspaces.map((w: any) => {
                 const active = (workspaceId ?? "demo") === w.id;
                 return (
                   <button
@@ -618,11 +567,76 @@ export function AppLayout() {
         ) : null}
 
         {/* Main */}
-        <main className="min-w-0 flex-1 bg-slate-50 h-full overflow-y-auto">
-          <div className="mx-auto max-w-[1400px] px-6 py-6">
-            <Outlet />
+        <main className="min-w-0 flex-1 bg-slate-50 h-full overflow-y-auto flex flex-col relative w-full">
+          {/* Top bar moved inside Main Content, absolutely positioned or sticky *over* content */}
+          <header className="sticky top-0 z-10 bg-transparent pointer-events-none">
+            {/* pointer-events-none so we can click through empty space, but buttons need pointer-events-auto */}
+            <div className="w-full h-14 flex items-center justify-end px-4">
+              <div className="flex items-center gap-2 pointer-events-auto mt-2 mr-2">
+                <Button variant="ghost" size="sm" aria-label="Notifications" className="bg-white/50 backdrop-blur-sm shadow-sm border border-slate-200/50">
+                  <Bell size={18} />
+                </Button>
+                <div
+                  className={cn(
+                    "hidden md:flex items-center rounded-full border px-2.5 py-1 text-xs font-medium bg-white/50 backdrop-blur-sm shadow-sm border-slate-200/50",
+                    adapterKind === "supabase"
+                      ? "text-emerald-700 font-bold"
+                      : "text-slate-700"
+                  )}
+                  title="Active backend for reads/writes"
+                >
+                  Backend: {adapterKind === "supabase" ? "Supabase" : "Mock"}
+                </div>
+                {(import.meta.env.VITE_USE_SUPABASE as string | undefined) === "1" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="bg-white/50 backdrop-blur-sm shadow-sm border border-slate-200/50"
+                    onClick={() => setAuthOpen(true)}
+                    title={supabaseEmail ? "Supabase auth: signed in" : "Supabase auth: sign in"}
+                  >
+                    {supabaseEmail ? "Supabase ✓" : "Sign in"}
+                  </Button>
+                ) : null}
+                <div className="flex items-center gap-2">
+                  <select
+                    className="hidden h-9 rounded-lg border border-slate-200/50 bg-white/50 backdrop-blur-sm shadow-sm px-2 text-sm text-slate-700 md:block focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    value={session.user.id}
+                    onChange={(e) => setUser(e.target.value)}
+                    aria-label="Switch user (stub)"
+                    title="Stub auth: switch active user"
+                    disabled={Boolean(supabaseEmail)}
+                  >
+                    {allUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="hidden h-9 rounded-lg border border-slate-200/50 bg-white/50 backdrop-blur-sm shadow-sm px-2 text-sm text-slate-700 md:block focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    value={session.workspaceRole}
+                    onChange={(e) => setWorkspaceRole(e.target.value as any)}
+                    aria-label="Switch role (stub)"
+                    title="Stub auth: switch workspace role"
+                    disabled={Boolean(supabaseEmail)}
+                  >
+                    <option value="owner">Owner</option>
+                    <option value="admin">Admin</option>
+                    <option value="member">Member</option>
+                  </select>
+                  <div className="bg-white/50 backdrop-blur-sm shadow-sm rounded-full p-0.5 border border-slate-200/50">
+                    <Avatar name={supabaseEmail ?? session.user.name} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
 
-            <footer className="mt-8 flex items-center justify-between border-t border-slate-200 pt-4 text-xs text-slate-500">
+          <div className="w-full flex-grow mx-auto px-6 py-2 pb-6 flex flex-col">
+            <Outlet />
+            <div className="flex-grow min-h-[4rem]" />
+            <footer className="mt-8 flex items-center justify-between border-t border-slate-200 pt-4 pb-4 text-xs text-slate-500 mt-auto">
               <span>© {new Date().getFullYear()} NXTUP. All rights reserved.</span>
               <span className="space-x-4">
                 <a className="hover:text-slate-700" href="#">

@@ -1,7 +1,8 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, ChevronDown, ChevronRight, Eye, Filter, MoreHorizontal, Plus, Tag, Users } from "lucide-react";
+import { Calendar, ChevronDown, ChevronRight, Eye, Filter, GripVertical, MoreHorizontal, Plus, Tag, Users, CheckCircle2, MessageSquare } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useDrop } from "react-dnd";
 
 import {
   createTaskGroup,
@@ -49,6 +50,7 @@ import { DroppableListCard, DoneSection } from "../components/DroppableListCard"
 import { useQueryClient } from "@tanstack/react-query";
 import { DISPLAY_KEY, loadDisplayPrefs, type DisplayPrefs } from "../state/displayPrefs";
 import { useStubSession } from "../../auth/stubAuth";
+import { getUniqueName } from "../../utils/nameUtils";
 
 const DND_MIME = "application/x-nxtup-task";
 type DragPayload = { taskId: string; fromListId?: string | null };
@@ -144,7 +146,8 @@ function HorizontalScrollRow({ children, dotCount }: { children: React.ReactNode
       <div
         ref={ref}
         className={cn(
-          "flex gap-5 overflow-x-auto pb-2",
+          "flex gap-5 overflow-x-auto px-2 -mx-2 py-1 -my-1 pb-3",
+          "[&>*:first-child]:ml-1",
           // Hide native horizontal scrollbar (keep trackpad/scrollwheel scrolling).
           "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         )}
@@ -152,6 +155,196 @@ function HorizontalScrollRow({ children, dotCount }: { children: React.ReactNode
         {children}
       </div>
       <ScrollDots scrollerRef={ref} dotCount={dotCount} />
+    </div>
+  );
+}
+
+function DroppableAddListButton({
+  groupId,
+  workspaceId,
+  onDrop,
+  onAddClick
+}: {
+  groupId: string | null;
+  workspaceId: string;
+  onDrop: (listId: string) => void;
+  onAddClick: () => void;
+}) {
+  const [{ isOver, canDrop }, dropRef] = useDrop({
+    accept: "LIST",
+    drop: (item: { listId: string; listGroupId?: string | null }) => {
+      if ((item.listGroupId || null) !== (groupId || null)) {
+        onDrop(item.listId);
+      }
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop()
+    })
+  });
+
+  return (
+    <button
+      ref={dropRef as any}
+      onClick={onAddClick}
+      className={cn(
+        "w-[320px] shrink-0 rounded-xl border-2 border-dashed p-6 text-center text-sm font-medium transition flex items-center justify-center",
+        isOver && canDrop
+          ? "border-blue-400 bg-blue-50/50 text-blue-700"
+          : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+      )}
+    >
+      + Add list
+    </button>
+  );
+}
+
+function DroppableAddGroupButton({
+  onDropCreateGroup,
+  onAddClick
+}: {
+  onDropCreateGroup: (listId: string) => void;
+  onAddClick: () => void;
+}) {
+  const [{ isOver, canDrop }, dropRef] = useDrop({
+    accept: "LIST",
+    drop: (item: { listId: string }) => {
+      onDropCreateGroup(item.listId);
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop()
+    })
+  });
+
+  return (
+    <button
+      ref={dropRef as any}
+      onClick={onAddClick}
+      className={cn(
+        "mt-8 mb-12 w-full rounded-xl border-2 border-dashed p-8 text-center text-sm font-medium transition flex items-center justify-center",
+        isOver && canDrop
+          ? "border-blue-400 bg-blue-50/50 text-blue-700"
+          : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+      )}
+    >
+      + Add Group
+    </button>
+  );
+}
+
+function DroppableGroupHeader({
+  group,
+  groupListsLength,
+  groupVisibleTaskCount,
+  isCollapsed,
+  workspaceId,
+  onToggleCollapse,
+  onToggleCollapseAll,
+  onAddList,
+  onDeleteGroup,
+  onDropList
+}: {
+  group: { id: string; title: string; description?: string | null };
+  groupListsLength: number;
+  groupVisibleTaskCount: number;
+  isCollapsed: boolean;
+  workspaceId: string;
+  onToggleCollapse: (collapsed: boolean) => void;
+  onToggleCollapseAll: (collapsed: boolean) => void;
+  onAddList: () => void;
+  onDeleteGroup: () => void;
+  onDropList: (listId: string) => void;
+}) {
+  const qc = useQueryClient();
+  const [{ isOver, canDrop }, dropRef] = useDrop({
+    accept: "LIST",
+    drop: (item: { listId: string; listGroupId?: string | null }) => {
+      if ((item.listGroupId || null) !== (group.id || null)) {
+        onDropList(item.listId);
+      }
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop()
+    })
+  });
+
+  return (
+    <div
+      ref={dropRef as any}
+      className={cn(
+        "flex items-start justify-between gap-3 rounded-xl p-3 -mx-3 transition-colors",
+        isOver && canDrop ? "border-2 border-dashed border-blue-400 bg-blue-50/50" : "border-2 border-transparent"
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <InlineEditableText
+          value={group.title}
+          ariaLabel={`Rename group ${group.title}`}
+          className="block w-full text-lg font-semibold text-slate-900"
+          inputClassName="h-9 text-lg font-semibold"
+          onConfirm={async (next) => {
+            await updateTaskGroup({ id: group.id, title: next });
+            await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+          }}
+        />
+        <InlineEditableText
+          value={group.description ?? ""}
+          placeholder="Add group description…"
+          ariaLabel="Edit group description"
+          allowEmpty
+          truncate={false}
+          className="mt-1 block w-full text-sm text-slate-500 whitespace-normal"
+          inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
+          onConfirm={async (next) => {
+            await updateTaskGroup({
+              id: group.id,
+              description: next.trim().length ? next.trim() : null
+            });
+            await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+          }}
+        />
+        <div className="mt-1 text-xs text-slate-400">
+          {groupListsLength} {groupListsLength === 1 ? "list" : "lists"} • {groupVisibleTaskCount}{" "}
+          {groupVisibleTaskCount === 1 ? "task" : "tasks"}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={isCollapsed ? "Expand group" : "Collapse group"}
+          title={isCollapsed ? "Expand" : "Collapse"}
+          onClick={(e) => {
+            const nextCollapsed = !isCollapsed;
+            if (e.altKey || e.shiftKey) {
+              onToggleCollapseAll(nextCollapsed);
+              return;
+            }
+            onToggleCollapse(nextCollapsed);
+          }}
+        >
+          {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onAddList}
+        >
+          <Plus size={16} className="text-slate-600" />
+          Add list
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Group actions"
+          title="Delete group"
+          onClick={onDeleteGroup}
+        >
+          <MoreHorizontal size={18} />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -209,6 +402,7 @@ export function BoardPage() {
     };
   }, [addMenuOpen]);
   const [createTargetListId, setCreateTargetListId] = React.useState<string | null>(null);
+  const [createTargetUnlistedGroupId, setCreateTargetUnlistedGroupId] = React.useState<string | null | undefined>(undefined);
   const [collapsedGroupsById, setCollapsedGroupsById] = React.useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem(`${GROUP_COLLAPSE_KEY_PREFIX}${workspaceId}`);
@@ -259,6 +453,20 @@ export function BoardPage() {
   const [unknownMemberNameDraft, setUnknownMemberNameDraft] = React.useState("");
   const [unknownMemberEmailDraft, setUnknownMemberEmailDraft] = React.useState("");
   const [unknownMemberSendInvite, setUnknownMemberSendInvite] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!listModal) {
+      setListTitleDraft("");
+      setListTypeDraft("other");
+    }
+  }, [listModal]);
+
+  React.useEffect(() => {
+    if (!groupModal) {
+      setGroupTitleDraft("");
+      setGroupDescDraft("");
+    }
+  }, [groupModal]);
 
   React.useEffect(() => {
     try {
@@ -374,6 +582,7 @@ export function BoardPage() {
     setDrawerOpen(false);
     setActiveTaskId(null);
     setCreateTargetListId(null);
+    setCreateTargetUnlistedGroupId(undefined);
     if (searchParams.get("task")) {
       const next = new URLSearchParams(searchParams);
       next.delete("task");
@@ -385,24 +594,30 @@ export function BoardPage() {
   const priority = (searchParams.get("priority") ?? "").trim().toLowerCase();
   const due = (searchParams.get("due") ?? "").trim().toLowerCase(); // "overdue" | "next7"
 
-  // Only show tasks that have at least one placement in any canvas list (ungrouped + grouped).
+  // Identify tasks that are on the board, but have no placements tying them to any list
   const canvasTaskIdSet = React.useMemo(() => new Set(canvasPlacements.map((p) => p.taskId)), [canvasPlacements]);
+
   const canvasPlacedTasks = React.useMemo(
     () => boardTasks.filter((t) => canvasTaskIdSet.has(t.id)),
     [boardTasks, canvasTaskIdSet]
   );
 
-  const filteredTasks = canvasPlacedTasks.filter((t) => {
+  const unlistedBoardTasks = React.useMemo(
+    () => boardTasks.filter((t) => !canvasTaskIdSet.has(t.id)),
+    [boardTasks, canvasTaskIdSet]
+  );
+
+  function applyFilters(task: Task) {
     if (q.length) {
-      const assigneeName = profiles.find((p) => p.id === t.assigneeId)?.name ?? "";
-      const haystack = `${t.title} ${assigneeName} ${t.tags.join(" ")}`.toLowerCase();
+      const assigneeName = profiles.find((p) => p.id === task.assigneeId)?.name ?? "";
+      const haystack = `${task.title} ${assigneeName} ${task.tags.join(" ")}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
-    if (priority.length && t.priority !== priority) return false;
+    if (priority.length && task.priority !== priority) return false;
     if (due.length) {
-      if (!t.dueDate) return false;
+      if (!task.dueDate) return false;
       const today = new Date();
-      const dueDate = new Date(`${t.dueDate}T00:00:00`);
+      const dueDate = new Date(`${task.dueDate}T00:00:00`);
       if (due === "overdue") {
         if (!(dueDate.getTime() < new Date(today.toDateString()).getTime())) return false;
       }
@@ -414,7 +629,20 @@ export function BoardPage() {
       }
     }
     return true;
-  });
+  }
+  const filteredTasks = canvasPlacedTasks.filter(applyFilters);
+  const filteredUnlistedTasks = unlistedBoardTasks.filter(applyFilters);
+
+  const unlistedTasksByGroupId = React.useMemo(() => {
+    const m = new Map<string | null, Task[]>();
+    for (const t of filteredUnlistedTasks) {
+      const gid = t.groupId ?? null;
+      const arr = m.get(gid) ?? [];
+      arr.push(t);
+      m.set(gid, arr);
+    }
+    return m;
+  }, [filteredUnlistedTasks]);
 
   const filteredTaskIdSet = React.useMemo(() => new Set(filteredTasks.map((t) => t.id)), [filteredTasks]);
 
@@ -594,7 +822,10 @@ export function BoardPage() {
     op: null | "move" | "add";
     listPart: string | null;
   }) {
-    const title = input.titleMode === "strip" ? stripPeopleHints(input.taskPart) : input.taskPart.trim();
+    const baseTitle = input.titleMode === "strip" ? stripPeopleHints(input.taskPart) : input.taskPart.trim();
+    const existingTitles = tasks.map(t => t.title);
+    const title = await getUniqueName(baseTitle, existingTitles);
+
     const created = await createTask({
       workspaceId,
       createdBy: session.user.id,
@@ -745,6 +976,7 @@ export function BoardPage() {
               onClick={() => {
                 setAddMenuOpen(false);
                 setCreateTargetListId(null);
+                setCreateTargetUnlistedGroupId(undefined);
                 setDrawerMode("create");
                 setActiveTaskId(null);
                 setDrawerOpen(true);
@@ -1090,7 +1322,8 @@ export function BoardPage() {
             <div className="text-xs font-medium text-slate-500">Ungrouped</div>
             <div className="text-xs text-slate-400">Up to 3 lists</div>
           </div>
-          <HorizontalScrollRow dotCount={ungroupedLists.slice(0, 3).length}>
+          <HorizontalScrollRow dotCount={ungroupedLists.slice(0, 3).length + 1}>
+            {/* Standard Ungrouped Lists */}
             {ungroupedLists.slice(0, 3).map((list) => {
               const listPlacements = placementsByList.get(list.id) ?? [];
               const listTasks = listPlacements
@@ -1102,6 +1335,7 @@ export function BoardPage() {
                 <DroppableListCard
                   key={list.id}
                   listId={list.id}
+                  isDraggable={list.type !== "inbox"}
                   className="w-[320px] shrink-0 p-4"
                   onTaskDrop={(taskId, fromListId) => handleTaskDrop(taskId, list.id, fromListId)}
                 >
@@ -1171,10 +1405,33 @@ export function BoardPage() {
                       />
                     ))}
                     {count === 0 ? (
-                      <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                        Drop tasks here or use Add → Task
-                      </div>
+                      <button
+                        onClick={() => {
+                          setCreateTargetListId(list.id);
+                          setCreateTargetUnlistedGroupId(undefined);
+                          setDrawerMode("create");
+                          setDrawerOpen(true);
+                          setLastUngroupedListId(list.id);
+                        }}
+                        className="w-full rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+                      >
+                        Drop tasks here or click to add a task
+                      </button>
                     ) : null}
+                    {count > 0 && (
+                      <button
+                        onClick={() => {
+                          setCreateTargetListId(list.id);
+                          setCreateTargetUnlistedGroupId(undefined);
+                          setDrawerMode("create");
+                          setDrawerOpen(true);
+                          setLastUngroupedListId(list.id);
+                        }}
+                        className="w-full mt-2 rounded-lg border border-dashed border-slate-200 p-3 text-center text-xs font-medium text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-700 transition-colors"
+                      >
+                        + Add task
+                      </button>
+                    )}
                   </div>
                   <DoneSection
                     tasks={listTasks.filter((t) => t.status === "done")}
@@ -1197,19 +1454,108 @@ export function BoardPage() {
               );
             })}
             {ungroupedLists.length < 3 ? (
-              <button
-                className="w-[320px] shrink-0 rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-left hover:bg-slate-50"
-                onClick={async () => {
-                  const created = await createUngroupedList();
-                  if (created?.id) setLastUngroupedListId(created.id);
+              <DroppableAddListButton
+                groupId={null}
+                workspaceId={workspaceId}
+                onDrop={async (listId) => {
+                  await updateTaskList({ id: listId, groupId: null });
+                  await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
                 }}
-              >
-                <div className="text-sm font-semibold text-slate-900">+ Add list</div>
-                <div className="mt-1 text-sm text-slate-500">
-                  Creates Inbox (workspace){ungroupedLists.length ? ` ${ungroupedLists.length + 1}` : ""}
-                </div>
-              </button>
+                onAddClick={() => {
+                  setListTitleDraft("");
+                  setListTypeDraft("other");
+                  setListModal({ mode: "create", groupId: null });
+                }}
+              />
             ) : null}
+
+            {/* Unlisted (Orphaned) Tasks - Appended to the end */}
+            <DroppableListCard
+              key="unlisted-virtual-list"
+              listId="unlisted-virtual-list"
+              className="w-[320px] shrink-0 p-4 border-dashed bg-slate-50/50"
+              onTaskDrop={async (taskId, fromListId) => {
+                // If dropped here, we want to REMOVE it from any lists but keep it on the board.
+                const ps = placements.filter((p) => p.taskId === taskId);
+                if (ps.length > 0) {
+                  await Promise.all(
+                    ps.map((p) =>
+                      deleteTaskPlacementByTaskAndList({
+                        workspaceId,
+                        taskId,
+                        listId: p.listId
+                      })
+                    )
+                  );
+                  await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+                }
+                updateTask({ id: taskId, location: "board", groupId: null, assigneeId: null });
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-200 text-xs font-semibold text-slate-500">
+                    ?
+                  </div>
+                  <div className="min-w-0">
+                    <div className="block w-full font-semibold text-slate-700">Unlisted Tasks</div>
+                    <div className="mt-1 block w-full text-xs text-slate-400 whitespace-normal">
+                      Tasks on the board with no list
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
+                    {(unlistedTasksByGroupId.get(null) ?? []).length}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {(unlistedTasksByGroupId.get(null) ?? []).filter(t => t.status !== "done").map((t) => (
+                  <DraggableTask
+                    key={t.id}
+                    task={t}
+                    fromListId={null} // Null fromListId identifies it came from unlisted
+                    onClick={() => {
+                      setDrawerMode("edit");
+                      setActiveTaskId(t.id);
+                      setDrawerOpen(true);
+                      setLastUngroupedListId(null as any);
+                    }}
+                    display={display}
+                  />
+                ))}
+                <button
+                  onClick={() => {
+                    setCreateTargetListId(null);
+                    setCreateTargetUnlistedGroupId(null);
+                    setDrawerMode("create");
+                    setDrawerOpen(true);
+                    setLastUngroupedListId(null as any);
+                  }}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <Plus size={16} />
+                  Add task
+                </button>
+              </div>
+              <DoneSection
+                tasks={(unlistedTasksByGroupId.get(null) ?? []).filter((t) => t.status === "done")}
+                renderTask={(t) => (
+                  <DraggableTask
+                    key={t.id}
+                    task={t}
+                    fromListId={null}
+                    onClick={() => {
+                      setDrawerMode("edit");
+                      setActiveTaskId(t.id);
+                      setDrawerOpen(true);
+                    }}
+                    display={display}
+                  />
+                )}
+              />
+            </DroppableListCard>
           </HorizontalScrollRow>
         </section>
         {groups
@@ -1237,87 +1583,31 @@ export function BoardPage() {
                   idx === 0 ? "pt-2" : "mt-6 border-t border-slate-200 pt-6"
                 )}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <InlineEditableText
-                      value={group.title}
-                      ariaLabel={`Rename group ${group.title}`}
-                      className="block w-full text-lg font-semibold text-slate-900"
-                      inputClassName="h-9 text-lg font-semibold"
-                      onConfirm={async (next) => {
-                        await updateTaskGroup({ id: group.id, title: next });
-                        await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-                      }}
-                    />
-                    <InlineEditableText
-                      value={group.description ?? ""}
-                      placeholder="Add group description…"
-                      ariaLabel="Edit group description"
-                      allowEmpty
-                      truncate={false}
-                      className="mt-1 block w-full text-sm text-slate-500 whitespace-normal"
-                      inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
-                      onConfirm={async (next) => {
-                        await updateTaskGroup({
-                          id: group.id,
-                          description: next.trim().length ? next.trim() : null
-                        });
-                        await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-                      }}
-                    />
-                    <div className="mt-1 text-xs text-slate-400">
-                      {groupLists.length} {groupLists.length === 1 ? "list" : "lists"} • {groupVisibleTaskCount}{" "}
-                      {groupVisibleTaskCount === 1 ? "task" : "tasks"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={isCollapsed ? "Expand group" : "Collapse group"}
-                      title={isCollapsed ? "Expand" : "Collapse"}
-                      onClick={(e) => {
-                        const nextCollapsed = !isCollapsed;
-                        if (e.altKey || e.shiftKey) {
-                          // Alt/Option-click or Shift-click toggles all groups together.
-                          setCollapsedGroupsById((prev) => {
-                            const next = { ...prev };
-                            for (const g of groups) next[g.id] = nextCollapsed;
-                            return next;
-                          });
-                          return;
-                        }
-
-                        setCollapsedGroupsById((prev) => ({ ...prev, [group.id]: nextCollapsed }));
-                      }}
-                    >
-                      {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        setListTitleDraft("");
-                        setListTypeDraft("other");
-                        setListModal({ mode: "create", groupId: group.id });
-                      }}
-                    >
-                      <Plus size={16} className="text-slate-600" />
-                      Add list
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Group actions"
-                      title="Delete group"
-                      onClick={() => {
-                        setGroupModal({ mode: "delete", id: group.id, title: group.title });
-                      }}
-                    >
-                      <MoreHorizontal size={18} />
-                    </Button>
-                  </div>
-                </div>
+                <DroppableGroupHeader
+                  group={group}
+                  groupListsLength={groupLists.length}
+                  groupVisibleTaskCount={groupVisibleTaskCount}
+                  isCollapsed={isCollapsed}
+                  workspaceId={workspaceId}
+                  onToggleCollapse={(collapsed) => setCollapsedGroupsById((prev) => ({ ...prev, [group.id]: collapsed }))}
+                  onToggleCollapseAll={(collapsed) => {
+                    setCollapsedGroupsById((prev) => {
+                      const next = { ...prev };
+                      for (const g of groups) next[g.id] = collapsed;
+                      return next;
+                    });
+                  }}
+                  onAddList={() => {
+                    setListTitleDraft("");
+                    setListTypeDraft("other");
+                    setListModal({ mode: "create", groupId: group.id });
+                  }}
+                  onDeleteGroup={() => setGroupModal({ mode: "delete", id: group.id, title: group.title })}
+                  onDropList={async (listId) => {
+                    await updateTaskList({ id: listId, groupId: group.id });
+                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                  }}
+                />
 
                 {isCollapsed ? null : (
                   <div className="mt-4">
@@ -1336,6 +1626,8 @@ export function BoardPage() {
                           <DroppableListCard
                             key={list.id}
                             listId={list.id}
+                            listGroupId={list.groupId}
+                            isDraggable={list.type !== "inbox"}
                             className="w-[320px] shrink-0 p-4"
                             onTaskDrop={(taskId, fromListId) => {
                               const person = list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
@@ -1418,10 +1710,31 @@ export function BoardPage() {
                                 />
                               ))}
                               {count === 0 ? (
-                                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                                  No tasks yet
-                                </div>
+                                <button
+                                  onClick={() => {
+                                    setCreateTargetListId(list.id);
+                                    setCreateTargetUnlistedGroupId(undefined);
+                                    setDrawerMode("create");
+                                    setDrawerOpen(true);
+                                  }}
+                                  className="w-full rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+                                >
+                                  Drop tasks here or click to add a task
+                                </button>
                               ) : null}
+                              {count > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setCreateTargetListId(list.id);
+                                    setCreateTargetUnlistedGroupId(undefined);
+                                    setDrawerMode("create");
+                                    setDrawerOpen(true);
+                                  }}
+                                  className="w-full mt-2 rounded-lg border border-dashed border-slate-200 p-3 text-center text-xs font-medium text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-700 transition-colors"
+                                >
+                                  + Add task
+                                </button>
+                              )}
                             </div>
                             <DoneSection
                               tasks={listTasks.filter((t) => t.status === "done")}
@@ -1442,12 +1755,125 @@ export function BoardPage() {
                           </DroppableListCard>
                         );
                       })}
+                      {/* Unlisted Tasks for this specific Group */}
+                      <DroppableListCard
+                        listId={`unlisted-group-${group.id}`}
+                        className="w-[320px] shrink-0 p-4 border-dashed bg-slate-50 border-slate-200 flex flex-col"
+                        onTaskDrop={async (taskId, fromListId) => {
+                          const task = tasksById.get(taskId);
+                          if (!task) return;
+
+                          // 1. Delete placement from old list (if it was in one)
+                          if (fromListId) {
+                            await deleteTaskPlacementByTaskAndList({
+                              workspaceId,
+                              taskId,
+                              listId: fromListId,
+                            });
+                          }
+
+                          // 2. Assign specifically to this Group
+                          await updateTask({ id: taskId, location: "board", groupId: group.id });
+
+                          // 3. Invalidate
+                          await Promise.all([
+                            qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] }),
+                            qc.invalidateQueries({ queryKey: ["tasks", workspaceId] }),
+                          ]);
+                        }}
+                      >
+                        <div className="mb-4 flex items-center justify-between">
+                          <div className="font-semibold text-slate-900">Unlisted Tasks</div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto space-y-2 pb-2">
+                          {(unlistedTasksByGroupId.get(group.id) ?? []).length === 0 ? (
+                            <button
+                              onClick={() => {
+                                setCreateTargetListId(null);
+                                setCreateTargetUnlistedGroupId(group.id);
+                                setDrawerMode("create");
+                                setDrawerOpen(true);
+                                setLastUngroupedListId(null as any); // Might need to pass groupId here eventually
+                              }}
+                              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                              <Plus size={16} />
+                              Add task
+                            </button>
+                          ) : null}
+                          {(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "active").map((t) => (
+                            <DraggableTask
+                              key={t.id}
+                              task={t}
+                              fromListId={null}
+                              onClick={() => {
+                                setDrawerMode("edit");
+                                setActiveTaskId(t.id);
+                                setDrawerOpen(true);
+                              }}
+                              display={display}
+                            />
+                          ))}
+                          {(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "active").length > 0 && (
+                            <button
+                              onClick={() => {
+                                // For unlisted group tasks we don't set a createTargetListId, just open drawer
+                                setDrawerMode("create");
+                                setDrawerOpen(true);
+                              }}
+                              className="w-full mt-2 rounded-lg border border-dashed border-slate-200 p-3 text-center text-xs font-medium text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-700 transition-colors"
+                            >
+                              + Add task
+                            </button>
+                          )}
+                        </div>
+                        <DoneSection
+                          tasks={(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "done")}
+                          renderTask={(t) => (
+                            <DraggableTask
+                              key={t.id}
+                              task={t}
+                              fromListId={null}
+                              onClick={() => {
+                                setDrawerMode("edit");
+                                setActiveTaskId(t.id);
+                                setDrawerOpen(true);
+                              }}
+                              display={display}
+                            />
+                          )}
+                        />
+                      </DroppableListCard>
+                      <DroppableAddListButton
+                        groupId={group.id}
+                        workspaceId={workspaceId}
+                        onDrop={async (listId) => {
+                          await updateTaskList({ id: listId, groupId: group.id });
+                          await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                        }}
+                        onAddClick={() => setListModal({ mode: "create", groupId: group.id })}
+                      />
                     </HorizontalScrollRow>
                   </div>
                 )}
               </section>
             );
           })}
+
+        {/* Add Group Placeholder */}
+        <DroppableAddGroupButton
+          onAddClick={() => setGroupModal({ mode: "create" })}
+          onDropCreateGroup={async (listId) => {
+            const newGroup = await createTaskGroup({
+              workspaceId,
+              title: "New Group",
+              sortOrder: groups.length
+            });
+            await updateTaskList({ id: listId, groupId: newGroup.id });
+            await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+            await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+          }}
+        />
       </div>
 
       <TaskDrawer
@@ -1457,6 +1883,9 @@ export function BoardPage() {
         profiles={profiles}
         currentUserId={session.user.id}
         lists={lists}
+        groups={groups}
+        createTargetListId={createTargetListId}
+        createTargetUnlistedGroupId={createTargetUnlistedGroupId}
         onClose={closeTaskDrawer}
         onSave={async (values) => {
           let listIdToUse = values.listId;
@@ -1464,11 +1893,15 @@ export function BoardPage() {
 
           // If a new list was typed into the TaskDrawer combobox, create it first.
           if (values.newListName) {
+            const { getUniqueName } = await import("../../utils/nameUtils");
+            const existingNames = lists.map(l => l.title);
+            const finalName = getUniqueName(values.newListName.trim(), existingNames);
+
             const newList = await createTaskList({
               workspaceId,
               groupId: null,
               type: "other",
-              title: values.newListName
+              title: finalName
             });
             listIdToUse = newList.id;
             locationToUse = "board";
@@ -1482,17 +1915,20 @@ export function BoardPage() {
               locationToUse = "board";
             }
 
+            const isUnlistedCreation = createTargetListId === null && createTargetUnlistedGroupId !== undefined;
+
             const created = await createTask({
               workspaceId,
               createdBy: session.user.id,
               title: values.title,
               priority: values.priority,
-              location: locationToUse,
+              location: isUnlistedCreation ? "board" : locationToUse,
               dueDate: values.dueDate ?? undefined,
-              assigneeId: values.assigneeId
+              assigneeId: values.assigneeId,
+              groupId: isUnlistedCreation ? createTargetUnlistedGroupId : null
             });
 
-            if (created.location === "board") {
+            if (created.location === "board" && !isUnlistedCreation) {
               const list =
                 (listIdToUse ? lists.find((l) => l.id === listIdToUse) ?? { id: listIdToUse, groupId: null, type: "other", title: values.newListName ?? "", sortOrder: 0, workspaceId } : null) ??
                 (created.assigneeId ? personListByProfileId.get(created.assigneeId) : null) ??
@@ -1509,6 +1945,14 @@ export function BoardPage() {
                 if (list.groupId == null && list.type !== "inbox") setLastUngroupedListId(list.id);
                 await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
               }
+            } else if (created.location === "inbox" && inboxList) {
+              await createTaskPlacement({
+                workspaceId,
+                taskId: created.id,
+                listId: inboxList.id,
+                createdBy: session.user.id
+              });
+              await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
             }
             await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
             setCreateTargetListId(null);
@@ -1672,13 +2116,15 @@ export function BoardPage() {
               ) : (
                 <Button
                   onClick={async () => {
-                    const title = groupTitleDraft.trim();
+                    const { getUniqueName } = await import("../../utils/nameUtils");
+                    const existingNames = groups.map((g: any) => g.title);
+                    const finalName = getUniqueName(groupTitleDraft.trim(), existingNames);
                     const description = groupDescDraft.trim().length ? groupDescDraft.trim() : null;
                     try {
                       if (groupModal.mode === "create") {
-                        await createTaskGroup({ workspaceId, title, description });
+                        await createTaskGroup({ workspaceId, title: finalName, description });
                       } else {
-                        await updateTaskGroup({ id: groupModal.id, title, description });
+                        await updateTaskGroup({ id: groupModal.id, title: finalName, description });
                       }
                       await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
                       setGroupModal(null);
@@ -1735,7 +2181,6 @@ export function BoardPage() {
         )}
       </Modal>
 
-      {/* List management */}
       <Modal
         open={Boolean(listModal)}
         title={
@@ -1763,17 +2208,24 @@ export function BoardPage() {
               ) : (
                 <Button
                   onClick={async () => {
-                    const title = listTitleDraft.trim();
+                    const { getUniqueName } = await import("../../utils/nameUtils");
+                    const existingNames = lists.map(l => l.title);
+                    const finalName = getUniqueName(listTitleDraft.trim(), existingNames);
+
                     try {
                       if (listModal.mode === "create") {
+                        if (!listModal.groupId && ungroupedLists.length >= 3) {
+                          toast.error("You cannot have more than 3 ungrouped lists.");
+                          return;
+                        }
                         await createTaskList({
                           workspaceId,
                           groupId: listModal.groupId,
                           type: listTypeDraft,
-                          title
+                          title: finalName
                         });
                       } else {
-                        await updateTaskList({ id: listModal.id, title });
+                        await updateTaskList({ id: listModal.id, title: listModal.title === finalName ? finalName : finalName });
                       }
                       await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
                       setListModal(null);
@@ -1806,6 +2258,14 @@ export function BoardPage() {
                 placeholder="List title"
               />
             </div>
+            <div>
+              <div className="text-xs font-medium text-slate-600">Workspace</div>
+              <Input
+                className="mt-2 bg-slate-50 text-slate-500 cursor-not-allowed"
+                disabled
+                value={workspaceQ.data?.name ?? workspaceId}
+              />
+            </div>
             {listModal?.mode === "create" ? (
               <div>
                 <div className="text-xs font-medium text-slate-600">Type</div>
@@ -1835,16 +2295,16 @@ export function BoardPage() {
             )}
           </div>
         )}
-      </Modal>
+      </Modal >
 
       {/* Unknown @name / (name) during Quick Entry */}
-      <Modal
+      < Modal
         open={Boolean(unknownMemberModal)}
         title="Add team member?"
         onClose={() => setUnknownMemberModal(null)}
         footer={
           unknownMemberModal ? (
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2" >
               <Button
                 variant="ghost"
                 onClick={async () => {
@@ -1946,7 +2406,7 @@ export function BoardPage() {
             Send invite now (requires email)
           </label>
         </div>
-      </Modal>
+      </Modal >
 
       <Modal
         open={displayOpen}
@@ -2011,13 +2471,7 @@ export function BoardPage() {
   );
 }
 
-function StatPill({
-  children,
-  className
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function StatPill({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <span
       className={cn(
@@ -2031,5 +2485,3 @@ function StatPill({
 }
 
 // Removed old TaskCard in favor of DraggableTask component
-
-

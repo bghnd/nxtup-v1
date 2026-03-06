@@ -1,23 +1,6 @@
 import { getDataAdapter } from "./adapter";
 
-// Import non-adapter functions directly from api.ts (these bypass the adapter pattern for now)
-import {
-    createWorkspace,
-    updateWorkspace,
-    deleteWorkspace,
-    updateTaskGroup,
-    deleteTaskGroup,
-    updateTaskList,
-    deleteTaskList,
-    listTaskParticipants,
-    upsertTaskParticipant,
-    removeTaskParticipant,
-    createMemberPlaceholder,
-    setMemberRole,
-    getLastEntry,
-    duplicateTask
-} from "./api";
-
+// No direct api.ts imports are needed anymore since everything routes through the adapter!
 export const listWorkspaces = () => getDataAdapter().listWorkspaces();
 export const getWorkspace = (workspaceId: any) => getDataAdapter().getWorkspace(workspaceId);
 export const listProfiles = (workspaceId: any) => getDataAdapter().listProfiles(workspaceId);
@@ -41,20 +24,17 @@ export const updateTaskPlacement = (input: any) => getDataAdapter().updateTaskPl
 export const deleteTaskPlacement = (id: any) => getDataAdapter().deleteTaskPlacement(id);
 export const deleteTaskPlacementByTaskAndList = (input: any) => getDataAdapter().deleteTaskPlacementByTaskAndList(input);
 
-// Re-export functions not yet on the adapter (use mock api.ts directly for now):
-export {
-    createWorkspace,
-    updateWorkspace,
-    deleteWorkspace,
-    updateTaskGroup,
-    deleteTaskGroup,
-    updateTaskList,
-    deleteTaskList,
-    listTaskParticipants,
-    upsertTaskParticipant,
-    removeTaskParticipant,
-    createMemberPlaceholder,
-    setMemberRole,
-    getLastEntry,
-    duplicateTask
-};
+export const createWorkspace = (input: any) => getDataAdapter().createWorkspace(input);
+export const updateWorkspace = (input: any) => getDataAdapter().updateWorkspace(input);
+export const deleteWorkspace = (id: any) => getDataAdapter().deleteWorkspace(id);
+export const updateTaskGroup = (input: any) => getDataAdapter().updateTaskGroup(input);
+export const deleteTaskGroup = (id: any) => getDataAdapter().deleteTaskGroup(id);
+export const updateTaskList = (input: any) => getDataAdapter().updateTaskList(input);
+export const deleteTaskList = (id: any) => getDataAdapter().deleteTaskList(id);
+export const listTaskParticipants = (workspaceId: any) => getDataAdapter().listTaskParticipants(workspaceId);
+export const upsertTaskParticipant = (input: any) => getDataAdapter().upsertTaskParticipant(input);
+export const removeTaskParticipant = (input: any) => getDataAdapter().removeTaskParticipant(input);
+export const createMemberPlaceholder = (input: any) => getDataAdapter().createMemberPlaceholder(input);
+export const setMemberRole = (input: any) => getDataAdapter().setMemberRole(input);
+export const getLastEntry = (workspaceId: any) => getDataAdapter().getLastEntry(workspaceId);
+export const duplicateTask = (workspaceId: any, taskId: any, createdBy: any) => getDataAdapter().duplicateTask(workspaceId, taskId, createdBy);
