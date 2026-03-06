@@ -53,32 +53,32 @@ export function InboxPanel({
       }}
     >
       <div className="flex items-center gap-2">
-        <Inbox size={18} className="text-slate-600" />
-        <div className="text-sm font-semibold text-slate-900">Inbox</div>
-        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-medium text-slate-700">
+        <Inbox size={18} className="text-muted-foreground" />
+        <div className="text-sm font-semibold text-foreground">Inbox</div>
+        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 text-xs font-medium text-foreground-muted">
           {count}
         </span>
       </div>
 
       <div
         className={cn(
-          "mt-4 rounded-xl border border-slate-200 bg-white p-3 transition-colors",
+          "mt-4 rounded-xl border border-border bg-card p-3 transition-colors",
           isOver && "bg-blue-50/40 ring-2 ring-blue-500/20 ring-inset"
         )}
       >
         {tasks.length ? (
-          <div className="space-y-3">
+          <div className="space-y-[2px]">
             {tasks.map((t) => (
               <InboxTaskCard key={t.id} task={t} display={display} onOpen={() => onOpenTask(t.id)} />
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center">
-            <div className="text-sm font-medium text-slate-900">Inbox is empty</div>
-            <div className="mt-1 text-sm text-slate-500">
+          <div className="rounded-xl border border-dashed border-border p-8 text-center">
+            <div className="text-sm font-medium text-foreground">Inbox is empty</div>
+            <div className="mt-1 text-sm text-muted-foreground">
               New tasks can start here before being assigned to a teammate.
             </div>
-            <div className="mt-3 text-xs text-slate-500">
+            <div className="mt-3 text-xs text-muted-foreground">
               Tip: drop a task here to move it back to Inbox. Hold{" "}
               <kbd className="rounded border px-1">⌥</kbd> to keep the assignee.
             </div>
@@ -101,10 +101,11 @@ function InboxTaskCard({
   const due = task.dueDate ?? null;
   return (
     <button
-      className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:shadow-card transition-shadow"
+      className="w-full rounded-xl bg-transparent py-1.5 px-3 text-left hover:bg-accent/50 transition-colors"
       onClick={onOpen}
       draggable
       onDragStart={(e) => {
+        e.stopPropagation();
         e.dataTransfer.setData("text/plain", task.id);
         // Source list for inbox tasks is the inbox list; this enables MOVE vs ⌥-COPY semantics.
         e.dataTransfer.setData(DND_MIME, JSON.stringify({ taskId: task.id, fromListId: "l_inbox" }));
@@ -114,7 +115,7 @@ function InboxTaskCard({
       }}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="text-sm font-medium text-slate-900 line-clamp-2">{task.title}</div>
+        <div className="text-sm font-medium text-foreground line-clamp-2">{task.title}</div>
         {display.showPriority ? (
           <Badge variant={task.priority} className="shrink-0">
             {task.priority === "critical"
@@ -126,7 +127,7 @@ function InboxTaskCard({
 
       {display.showDueDate && due ? (
         <div className={cn("mt-3")}>
-          <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
+          <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
             📅 {due}
           </span>
         </div>

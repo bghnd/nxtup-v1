@@ -140,7 +140,7 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
 
                 {isSignedIn ? (
                     <div className="space-y-4">
-                        <p className="text-sm text-slate-600">You are signed in with Supabase.</p>
+                        <p className="text-sm text-muted-foreground">You are signed in with Supabase.</p>
                         <div className="flex gap-2">
                             <Button onClick={handleContinue} disabled={loading}>
                                 {loading ? "Loading..." : "Continue to Workspace"}
@@ -152,10 +152,10 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                     </div>
                 ) : sent ? (
                     <div className="space-y-2">
-                        <p className="text-sm text-slate-700">
+                        <p className="text-sm text-foreground-muted">
                             ✓ Magic link sent to <strong>{email}</strong>
                         </p>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-muted-foreground">
                             Check your email and click the link to sign in.
                         </p>
                         <Button variant="secondary" onClick={() => setSent(false)}>
@@ -166,7 +166,7 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                     <div className="space-y-4">
                         {/* Dev bypass button */}
                         {isDev && (
-                            <div className="border-b border-slate-200 pb-4">
+                            <div className="border-b border-border pb-4">
                                 <Button
                                     onClick={handleDevLogin}
                                     disabled={loading}
@@ -174,19 +174,19 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                                 >
                                     {loading ? "Signing in..." : "⚡ Dev Auto-Login"}
                                 </Button>
-                                <p className="mt-1 text-xs text-slate-500 text-center">
+                                <p className="mt-1 text-xs text-muted-foreground text-center">
                                     Development only — uses test account
                                 </p>
                             </div>
                         )}
 
                         {/* Mode tabs */}
-                        <div className="flex gap-2 border-b border-slate-200">
+                        <div className="flex gap-2 border-b border-border">
                             <button
                                 type="button"
                                 className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${mode === "password"
-                                    ? "border-blue-500 text-blue-600"
-                                    : "border-transparent text-slate-500 hover:text-slate-700"
+                                    ? "border-primary text-primary"
+                                    : "border-transparent text-muted-foreground hover:text-foreground-muted"
                                     }`}
                                 onClick={() => setMode("password")}
                             >
@@ -195,8 +195,8 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                             <button
                                 type="button"
                                 className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${mode === "magic"
-                                    ? "border-blue-500 text-blue-600"
-                                    : "border-transparent text-slate-500 hover:text-slate-700"
+                                    ? "border-primary text-primary"
+                                    : "border-transparent text-muted-foreground hover:text-foreground-muted"
                                     }`}
                                 onClick={() => setMode("magic")}
                             >
@@ -207,7 +207,7 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                         {mode === "password" ? (
                             <form onSubmit={handlePassword} className="space-y-3">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    <label className="block text-sm font-medium text-foreground-muted mb-1">
                                         Email
                                     </label>
                                     <Input
@@ -219,7 +219,7 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    <label className="block text-sm font-medium text-foreground-muted mb-1">
                                         Password
                                     </label>
                                     <Input
@@ -247,7 +247,7 @@ export function SupabaseAuthModal({ open, onOpenChange, onAuthed }: SupabaseAuth
                         ) : (
                             <form onSubmit={handleMagicLink} className="space-y-3">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    <label className="block text-sm font-medium text-foreground-muted mb-1">
                                         Email
                                     </label>
                                     <Input

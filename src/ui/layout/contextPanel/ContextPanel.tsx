@@ -4,7 +4,7 @@ import { Pin, PinOff, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { Button } from "../../components/Button";
 
-export type PanelType = "inbox" | "activity" | "saved";
+export type PanelType = "inbox" | "activity" | "saved" | "index";
 
 export function ContextPanel({
   panel,
@@ -49,36 +49,79 @@ export function ContextPanel({
 
   return (
     <section
-      className="relative shrink-0 border-r border-slate-200 bg-white h-full flex flex-col"
+      className="relative shrink-0 border-r border-border bg-card h-full flex flex-col"
       style={{ width }}
       aria-label="Context panel"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
-        <div className="flex items-center gap-1">
-          <TabButton active={panel === "inbox"} onClick={() => onSelectPanel("inbox")}>
-            Inbox
-          </TabButton>
-          <TabButton active={panel === "activity"} onClick={() => onSelectPanel("activity")} disabled>
-            Activity
-          </TabButton>
-          <TabButton active={panel === "saved"} onClick={() => onSelectPanel("saved")} disabled>
-            Saved
-          </TabButton>
+      <div className="flex flex-col border-b border-border">
+        <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1">
+          <div className="flex items-center gap-1">
+            <TabButton active={panel === "inbox"} onClick={() => onSelectPanel("inbox")}>
+              Inbox
+            </TabButton>
+            <TabButton active={panel === "activity"} onClick={() => onSelectPanel("activity")}>
+              Only me
+            </TabButton>
+            <TabButton active={panel === "saved"} onClick={() => onSelectPanel("saved")}>
+              Raw feed
+            </TabButton>
+            <TabButton active={panel === "index"} onClick={() => onSelectPanel("index")}>
+              Index
+            </TabButton>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={pinned ? "Unpin panel" : "Pin panel"}
+              title={pinned ? "Unpin panel" : "Pin panel"}
+              onClick={onTogglePinned}
+              className="h-7 w-7 p-0"
+            >
+              {pinned ? <PinOff size={16} /> : <Pin size={16} />}
+            </Button>
+            <Button variant="ghost" size="sm" aria-label="Close panel" title="Close panel" onClick={onClose} className="h-7 w-7 p-0">
+              <X size={16} />
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={pinned ? "Unpin panel" : "Pin panel"}
-            title={pinned ? "Unpin panel" : "Pin panel"}
-            onClick={onTogglePinned}
-          >
-            {pinned ? <PinOff size={18} /> : <Pin size={18} />}
-          </Button>
-          <Button variant="ghost" size="sm" aria-label="Close panel" title="Close panel" onClick={onClose}>
-            <X size={18} />
-          </Button>
+        <div className="px-4 pb-2 pt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          {panel === "inbox" && (
+            <>
+              <button className="hover:text-foreground transition-colors">Unread</button>
+              <span>&bull;</span>
+              <button className="hover:text-foreground transition-colors">Important</button>
+              <span>&bull;</span>
+              <button className="hover:text-foreground transition-colors">All</button>
+            </>
+          )}
+          {panel === "activity" && (
+            <>
+              <button className="hover:text-foreground transition-colors">Today</button>
+              <span>&bull;</span>
+              <button className="hover:text-foreground transition-colors">Upcoming</button>
+              <span>&bull;</span>
+              <button className="hover:text-foreground transition-colors">No date</button>
+            </>
+          )}
+          {panel === "saved" && (
+            <>
+              <button className="hover:text-foreground transition-colors">All updates</button>
+              <span>&bull;</span>
+              <button className="hover:text-foreground transition-colors">Mentions</button>
+            </>
+          )}
+          {panel === "index" && (
+            <>
+              <button className="hover:text-foreground transition-colors">A-Z</button>
+              <span>&bull;</span>
+              <button className="hover:text-foreground transition-colors">Recent</button>
+              <span>&bull;</span>
+              <button className="hover:text-foreground transition-colors">Unlisted</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -114,7 +157,7 @@ function TabButton({
     <button
       className={cn(
         "rounded-md px-2 py-1 text-xs font-medium transition-colors",
-        active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50",
+        active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent",
         disabled && "opacity-50 cursor-not-allowed hover:bg-transparent"
       )}
       disabled={disabled}

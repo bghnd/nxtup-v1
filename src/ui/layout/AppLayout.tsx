@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
-import { Bell, Inbox, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Settings, Users } from "lucide-react";
+import { Bell, Inbox, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Settings, Users, Moon, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -36,9 +36,9 @@ const PANEL_LAST_KEY = "nxtup.panel.last.v1";
 const PANEL_WIDTH_KEY = "nxtup.panel.width.v1";
 
 const navItem =
-  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100";
+  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-foreground-muted hover:bg-accent-hover";
 
-const navItemActive = "bg-slate-100 text-slate-900 font-medium";
+const navItemActive = "bg-accent text-foreground font-medium";
 
 export function AppLayout() {
   const { workspaceId } = useParams();
@@ -53,6 +53,30 @@ export function AppLayout() {
   const [inboxDropActive, setInboxDropActive] = React.useState(false);
   const inboxDragDepth = React.useRef(0);
   const INBOX_LONG_HOVER_MS = 1200;
+
+  const [theme, setTheme] = React.useState<"light" | "dark">(() => {
+    try {
+      const stored = localStorage.getItem("nxtup.theme.v1");
+      if (stored === "light" || stored === "dark") return stored;
+      // Linear defaults to dark visually, so we'll lean dark if no preference
+      return "dark";
+    } catch {
+      return "dark";
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("nxtup.theme.v1", theme);
+      if (theme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } catch {
+      // ignore
+    }
+  }, [theme]);
 
   const [panelPinned, setPanelPinned] = React.useState(() => {
     try {
@@ -106,6 +130,8 @@ export function AppLayout() {
   });
 
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(() => {
+    return false; // Force open
+    /*
     const getStored = () => {
       try {
         return localStorage.getItem(COLLAPSED_KEY) === "1";
@@ -118,10 +144,12 @@ export function AppLayout() {
       return window.matchMedia("(max-width: 1199px)").matches; // <1200px
     };
     return collapseMode === "manual" ? getStored() : getAuto();
+    */
   });
 
   // While any context panel is open, L1 must be rail-collapsed (icon-only).
-  const effectiveSidebarCollapsed = panel ? true : sidebarCollapsed;
+  // const effectiveSidebarCollapsed = panel ? true : sidebarCollapsed;
+  const effectiveSidebarCollapsed = sidebarCollapsed;
   const collapseButtonLabel = panel
     ? "Close panel and expand sidebar"
     : effectiveSidebarCollapsed
@@ -221,7 +249,7 @@ export function AppLayout() {
   }, [nav, qc, workspaceId]);
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-50">
+    <div className="h-screen overflow-hidden bg-background">
       {/* Top bar removed from here, moving Logo into Sidebar and Buttons into Main */}
 
       {/* End previous Top Bar area */}
@@ -241,14 +269,14 @@ export function AppLayout() {
         {/* Sidebar */}
         <aside
           className={cn(
-            "h-full shrink-0 border-r border-slate-200 bg-white overflow-hidden flex flex-col",
+            "h-full shrink-0 border-r border-border bg-card overflow-hidden flex flex-col z-10 dark:shadow-card-dark",
             effectiveSidebarCollapsed ? "w-[76px] px-2" : "w-[240px] px-3"
           )}
         >
           {/* Logo container at the top of Sidebar */}
           <div className={cn("flex items-center h-14 pl-1", effectiveSidebarCollapsed ? "justify-center" : "justify-start")}>
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 cursor-pointer" onClick={() => nav("/")}>
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-blue-600 text-white">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground cursor-pointer" onClick={() => nav("/")}>
+              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary text-white">
                 N
               </div>
               {!effectiveSidebarCollapsed && <span>NXTUP</span>}
@@ -256,6 +284,7 @@ export function AppLayout() {
           </div>
 
           <div className={cn("flex items-center px-1 py-1", effectiveSidebarCollapsed ? "justify-center" : "justify-end")}>
+            {/* 
             <Button
               variant="ghost"
               size="sm"
@@ -276,6 +305,7 @@ export function AppLayout() {
             >
               {effectiveSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </Button>
+            */}
           </div>
 
           <div className="flex-1 overflow-y-auto pb-3">
@@ -358,11 +388,11 @@ export function AppLayout() {
                   // Do not auto-open the Inbox drawer on drop; long-hover is the deliberate open gesture.
                 }}
               >
-                <Inbox size={18} className="text-slate-500" />
+                <Inbox size={18} className="text-muted-foreground" />
                 {!effectiveSidebarCollapsed ? (
                   <span className="flex w-full items-center justify-between gap-2">
                     <span>My Inbox</span>
-                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-medium text-slate-700">
+                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 text-xs font-medium text-foreground-muted">
                       {inboxCount}
                     </span>
                   </span>
@@ -377,7 +407,7 @@ export function AppLayout() {
                 }
                 title={effectiveSidebarCollapsed ? "My Dashboard" : undefined}
               >
-                <LayoutDashboard size={18} className="text-slate-500" />
+                <LayoutDashboard size={18} className="text-muted-foreground" />
                 {!effectiveSidebarCollapsed ? <span>My Dashboard</span> : <span className="sr-only">My Dashboard</span>}
               </NavLink>
             </nav>
@@ -385,7 +415,7 @@ export function AppLayout() {
             <div className={cn("mt-6", effectiveSidebarCollapsed ? "px-1 py-2" : "px-2 py-2")}>
               {!effectiveSidebarCollapsed ? (
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-medium text-slate-500">Workspaces</div>
+                  <div className="text-xs font-medium text-muted-foreground">Workspaces</div>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -397,7 +427,7 @@ export function AppLayout() {
                       setCreateWsName("");
                     }}
                   >
-                    <Plus size={16} className="text-slate-600" />
+                    <Plus size={16} className="text-muted-foreground" />
                   </Button>
                 </div>
               ) : (
@@ -408,7 +438,7 @@ export function AppLayout() {
             {createWsOpen && !effectiveSidebarCollapsed ? (
               <div className="px-2">
                 <input
-                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="h-8 w-full rounded-lg border border-border bg-card px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-blue-500/20"
                   placeholder="Workspace name…"
                   value={createWsName}
                   onChange={(e) => setCreateWsName(e.target.value)}
@@ -432,7 +462,7 @@ export function AppLayout() {
                     nav(`/w/${ws.id}/board`);
                   }}
                 />
-                <div className="mt-1 text-[11px] text-slate-500">Enter to create • Esc to cancel</div>
+                <div className="mt-1 text-[11px] text-muted-foreground">Enter to create • Esc to cancel</div>
               </div>
             ) : null}
 
@@ -451,14 +481,14 @@ export function AppLayout() {
                     onClick={() => nav(`/w/${w.id}/board`)}
                     title={effectiveSidebarCollapsed ? w.name : undefined}
                   >
-                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-xs font-semibold text-muted-foreground">
                       {(w.name?.trim()?.[0] ?? "W").toUpperCase()}
                     </div>
                     {!effectiveSidebarCollapsed ? (
                       <InlineEditableText
                         value={w.name}
                         ariaLabel={`Rename workspace ${w.name}`}
-                        className="text-sm font-medium text-slate-800"
+                        className="text-sm font-medium text-foreground-muted"
                         onConfirm={async (next) => {
                           await updateWorkspace({ id: w.id, name: next });
                           await qc.invalidateQueries({ queryKey: ["workspaces"] });
@@ -474,9 +504,9 @@ export function AppLayout() {
           </div>
 
           {/* Bottom settings group */}
-          <div className={cn("border-t border-slate-100 pt-3", effectiveSidebarCollapsed ? "pb-3" : "pb-4")}>
+          <div className={cn("border-t border-border pt-3", effectiveSidebarCollapsed ? "pb-3" : "pb-4")}>
             {!effectiveSidebarCollapsed ? (
-              <div className="px-2 pb-2 text-xs font-medium text-slate-500">Settings</div>
+              <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">Settings</div>
             ) : (
               <div className="sr-only">Settings</div>
             )}
@@ -488,7 +518,7 @@ export function AppLayout() {
                 }
                 title={effectiveSidebarCollapsed ? "Members" : undefined}
               >
-                <Users size={18} className="text-slate-500" />
+                <Users size={18} className="text-muted-foreground" />
                 {!effectiveSidebarCollapsed ? <span>Members</span> : <span className="sr-only">Members</span>}
               </NavLink>
               <NavLink
@@ -498,7 +528,7 @@ export function AppLayout() {
                 }
                 title={effectiveSidebarCollapsed ? "Settings" : undefined}
               >
-                <Settings size={18} className="text-slate-500" />
+                <Settings size={18} className="text-muted-foreground" />
                 {!effectiveSidebarCollapsed ? <span>Settings</span> : <span className="sr-only">Settings</span>}
               </NavLink>
 
@@ -510,7 +540,7 @@ export function AppLayout() {
                   setAuthOpen(true);
                 }}
               >
-                <LogOut size={18} className="text-slate-500" />
+                <LogOut size={18} className="text-muted-foreground" />
                 {!effectiveSidebarCollapsed ? <span>Logout</span> : <span className="sr-only">Logout</span>}
               </button>
             </nav>
@@ -546,20 +576,27 @@ export function AppLayout() {
               />
             ) : panel === "activity" ? (
               <div className="p-4">
-                <div className="text-sm font-semibold text-slate-900">Activity</div>
-                <div className="mt-2 text-sm text-slate-600">
-                  Placeholder tab.
+                <div className="text-sm font-semibold text-foreground">To-Do List</div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Tasks you have accepted responsibility for. Scheduled and unscheduled items for you to tackle.
                 </div>
               </div>
             ) : panel === "saved" ? (
               <div className="p-4">
-                <div className="text-sm font-semibold text-slate-900">Raw Mode</div>
-                <div className="mt-2 text-sm text-slate-600">
-                  Placeholder tab for a future phase: low-level/raw task stream and debugging views.
+                <div className="text-sm font-semibold text-foreground">Activity Log</div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  A chronological movement of tasks in and around the system. A raw feed and log across all participants.
+                </div>
+              </div>
+            ) : panel === "index" ? (
+              <div className="p-4">
+                <div className="text-sm font-semibold text-foreground">Global Index</div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  A categorical listing of all tasks universally. Find tasks regardless of which workspace board they currently live on.
                 </div>
               </div>
             ) : (
-              <div className="p-4 text-sm text-slate-500">
+              <div className="p-4 text-sm text-muted-foreground">
                 This panel is a placeholder for a future phase.
               </div>
             )}
@@ -567,21 +604,31 @@ export function AppLayout() {
         ) : null}
 
         {/* Main */}
-        <main className="min-w-0 flex-1 bg-slate-50 h-full overflow-y-auto flex flex-col relative w-full">
+        <main className="min-w-0 flex-1 bg-background h-full overflow-y-auto flex flex-col relative w-full">
           {/* Top bar moved inside Main Content, absolutely positioned or sticky *over* content */}
           <header className="sticky top-0 z-10 bg-transparent pointer-events-none">
             {/* pointer-events-none so we can click through empty space, but buttons need pointer-events-auto */}
             <div className="w-full h-14 flex items-center justify-end px-4">
               <div className="flex items-center gap-2 pointer-events-auto mt-2 mr-2">
-                <Button variant="ghost" size="sm" aria-label="Notifications" className="bg-white/50 backdrop-blur-sm shadow-sm border border-slate-200/50">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Toggle theme"
+                  title="Toggle theme"
+                  onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                  className="bg-card/50 backdrop-blur-sm shadow-sm border border-border/50"
+                >
+                  {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+                </Button>
+                <Button variant="ghost" size="sm" aria-label="Notifications" className="bg-card/50 backdrop-blur-sm shadow-sm border border-border/50">
                   <Bell size={18} />
                 </Button>
                 <div
                   className={cn(
-                    "hidden md:flex items-center rounded-full border px-2.5 py-1 text-xs font-medium bg-white/50 backdrop-blur-sm shadow-sm border-slate-200/50",
+                    "hidden md:flex items-center rounded-full border px-2.5 py-1 text-xs font-medium bg-card/50 backdrop-blur-sm shadow-sm border-border/50",
                     adapterKind === "supabase"
                       ? "text-emerald-700 font-bold"
-                      : "text-slate-700"
+                      : "text-foreground-muted"
                   )}
                   title="Active backend for reads/writes"
                 >
@@ -591,7 +638,7 @@ export function AppLayout() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="bg-white/50 backdrop-blur-sm shadow-sm border border-slate-200/50"
+                    className="bg-card/50 backdrop-blur-sm shadow-sm border border-border/50"
                     onClick={() => setAuthOpen(true)}
                     title={supabaseEmail ? "Supabase auth: signed in" : "Supabase auth: sign in"}
                   >
@@ -600,7 +647,7 @@ export function AppLayout() {
                 ) : null}
                 <div className="flex items-center gap-2">
                   <select
-                    className="hidden h-9 rounded-lg border border-slate-200/50 bg-white/50 backdrop-blur-sm shadow-sm px-2 text-sm text-slate-700 md:block focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="hidden h-9 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm px-2 text-sm text-foreground-muted md:block focus:outline-none focus:ring-2 focus:ring-primary/20"
                     value={session.user.id}
                     onChange={(e) => setUser(e.target.value)}
                     aria-label="Switch user (stub)"
@@ -614,7 +661,7 @@ export function AppLayout() {
                     ))}
                   </select>
                   <select
-                    className="hidden h-9 rounded-lg border border-slate-200/50 bg-white/50 backdrop-blur-sm shadow-sm px-2 text-sm text-slate-700 md:block focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="hidden h-9 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm px-2 text-sm text-foreground-muted md:block focus:outline-none focus:ring-2 focus:ring-primary/20"
                     value={session.workspaceRole}
                     onChange={(e) => setWorkspaceRole(e.target.value as any)}
                     aria-label="Switch role (stub)"
@@ -625,7 +672,7 @@ export function AppLayout() {
                     <option value="admin">Admin</option>
                     <option value="member">Member</option>
                   </select>
-                  <div className="bg-white/50 backdrop-blur-sm shadow-sm rounded-full p-0.5 border border-slate-200/50">
+                  <div className="bg-card/50 backdrop-blur-sm shadow-sm rounded-full p-0.5 border border-border/50">
                     <Avatar name={supabaseEmail ?? session.user.name} />
                   </div>
                 </div>
@@ -636,13 +683,13 @@ export function AppLayout() {
           <div className="w-full flex-grow mx-auto px-6 py-2 pb-6 flex flex-col">
             <Outlet />
             <div className="flex-grow min-h-[4rem]" />
-            <footer className="mt-8 flex items-center justify-between border-t border-slate-200 pt-4 pb-4 text-xs text-slate-500 mt-auto">
+            <footer className="mt-8 flex items-center justify-between border-t border-border pt-4 pb-4 text-xs text-muted-foreground mt-auto">
               <span>© {new Date().getFullYear()} NXTUP. All rights reserved.</span>
               <span className="space-x-4">
-                <a className="hover:text-slate-700" href="#">
+                <a className="hover:text-foreground-muted" href="#">
                   Privacy Policy
                 </a>
-                <a className="hover:text-slate-700" href="#">
+                <a className="hover:text-foreground-muted" href="#">
                   Terms of Service
                 </a>
               </span>

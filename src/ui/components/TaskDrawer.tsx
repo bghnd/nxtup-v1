@@ -131,19 +131,19 @@ export function TaskDrawer({
   return (
     <div className="fixed inset-0 z-50">
       <button
-        className="absolute inset-0 bg-slate-900/25"
+        className="absolute inset-0 bg-foreground/25"
         aria-label="Close task drawer"
         onClick={onClose}
       />
 
       <div className="absolute right-0 top-0 h-full w-[min(520px,calc(100vw-2rem))]">
-        <div className="flex h-full flex-col border-l border-slate-200 bg-white shadow-card">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+        <div className="flex h-full flex-col border-l border-border bg-card shadow-card">
+          <div className="flex items-start justify-between gap-4 border-b border-border p-5">
             <div>
-              <div className="text-lg font-semibold text-slate-900">
+              <div className="text-lg font-semibold text-foreground">
                 {mode === "create" ? "New Task" : "Task Details"}
               </div>
-              <div className="mt-1 text-sm text-slate-500">
+              <div className="mt-1 text-sm text-muted-foreground">
                 {mode === "create"
                   ? "Create a task and assign it to a teammate."
                   : "Edit the task fields and save."}
@@ -185,9 +185,9 @@ export function TaskDrawer({
                     placeholder="Type to search or create a list..."
                   />
                   {locationMenuOpen && (
-                    <div className="absolute top-full left-0 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg z-10">
+                    <div className="absolute top-full left-0 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg z-10">
                       <div
-                        className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                        className="cursor-pointer rounded-md px-3 py-2 text-sm text-foreground-muted hover:bg-accent-hover"
                         onPointerDown={(e) => {
                           e.preventDefault();
                           setLocation("inbox");
@@ -207,7 +207,7 @@ export function TaskDrawer({
                           return (
                             <div
                               key={list.id}
-                              className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center justify-between"
+                              className="cursor-pointer rounded-md px-3 py-2 text-sm text-foreground-muted hover:bg-accent-hover flex items-center justify-between"
                               onPointerDown={(e) => {
                                 e.preventDefault();
                                 setLocation("board");
@@ -218,7 +218,7 @@ export function TaskDrawer({
                               }}
                             >
                               <span>{list.title}</span>
-                              <span className="text-xs text-slate-400 max-w-[50%] truncate">{groupName}</span>
+                              <span className="text-xs text-muted max-w-[50%] truncate">{groupName}</span>
                             </div>
                           )
                         })}
@@ -284,7 +284,7 @@ export function TaskDrawer({
             </div>
           </div>
 
-          <div className="border-t border-slate-200 p-5">
+          <div className="border-t border-border p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 {mode === "edit" && onDelete ? (
@@ -292,7 +292,7 @@ export function TaskDrawer({
                     Delete
                   </Button>
                 ) : (
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     Tip: press <kbd className="rounded border px-1">Esc</kbd> to close
                   </span>
                 )}
@@ -335,7 +335,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="mb-1 text-xs font-medium text-slate-600">{label}</div>
+      <div className="mb-1 text-xs font-medium text-muted-foreground">{label}</div>
       <div className={cn("w-full")}>{children}</div>
     </label>
   );

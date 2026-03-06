@@ -47,15 +47,15 @@ export function MembersSettingsPage() {
 
   return (
     <div>
-      <div className="text-2xl font-semibold text-slate-900">Members</div>
-      <div className="mt-1 text-sm text-slate-500">
+      <div className="text-2xl font-semibold text-foreground">Members</div>
+      <div className="mt-1 text-sm text-muted-foreground">
         Invite + role management (stub mode, no realtime)
       </div>
 
       <div className="mt-6">
         <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-medium text-slate-900">Workspace members</div>
+            <div className="text-sm font-medium text-foreground">Workspace members</div>
             <Button size="sm" disabled={!canManageMembers} onClick={() => setInviteOpen(true)}>
               Invite member
             </Button>
@@ -67,8 +67,8 @@ export function MembersSettingsPage() {
                 <div className="flex items-center gap-3">
                   <Avatar name={m.profile.name} src={m.profile.avatarUrl} className="h-9 w-9" />
                   <div>
-                    <div className="text-sm font-medium text-slate-900">{m.profile.name}</div>
-                    <div className="text-sm text-slate-500">{m.profile.email}</div>
+                    <div className="text-sm font-medium text-foreground">{m.profile.name}</div>
+                    <div className="text-sm text-muted-foreground">{m.profile.email}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -100,8 +100,8 @@ export function MembersSettingsPage() {
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-slate-900">Invites</div>
-              <div className="mt-1 text-sm text-slate-500">
+              <div className="text-sm font-medium text-foreground">Invites</div>
+              <div className="mt-1 text-sm text-muted-foreground">
                 In stub mode, you can “accept” an invite as any demo user.
               </div>
             </div>
@@ -115,10 +115,10 @@ export function MembersSettingsPage() {
               invites.map((i) => (
                 <div key={i.id} className="flex items-center justify-between py-3">
                   <div>
-                    <div className="text-sm font-medium text-slate-900">{i.email}</div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm font-medium text-foreground">{i.email}</div>
+                    <div className="text-sm text-muted-foreground">
                       Role: {i.role} · Token:{" "}
-                      <span className="font-mono text-slate-700">{i.token}</span>
+                      <span className="font-mono text-foreground-muted">{i.token}</span>
                     </div>
                   </div>
                   <Button
@@ -138,7 +138,7 @@ export function MembersSettingsPage() {
                 </div>
               ))
             ) : (
-              <div className="py-6 text-sm text-slate-500">No pending invites.</div>
+              <div className="py-6 text-sm text-muted-foreground">No pending invites.</div>
             )}
           </div>
         </Card>
@@ -176,7 +176,7 @@ export function MembersSettingsPage() {
       >
         <div className="space-y-4">
           <label className="block">
-            <div className="mb-1 text-xs font-medium text-slate-600">Email</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Email</div>
             <Input
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
@@ -186,7 +186,7 @@ export function MembersSettingsPage() {
           </label>
 
           <label className="block">
-            <div className="mb-1 text-xs font-medium text-slate-600">Role</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Role</div>
             <Select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}>
               <option value="member">Member</option>
               <option value="admin">Admin</option>
@@ -225,7 +225,7 @@ export function MembersSettingsPage() {
       >
         <div className="space-y-4">
           <label className="block">
-            <div className="mb-1 text-xs font-medium text-slate-600">Invite token</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Invite token</div>
             <Input
               value={acceptToken}
               onChange={(e) => setAcceptToken(e.target.value)}
@@ -234,7 +234,7 @@ export function MembersSettingsPage() {
           </label>
 
           <label className="block">
-            <div className="mb-1 text-xs font-medium text-slate-600">Accept as</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Accept as</div>
             <Select value={acceptAsProfileId} onChange={(e) => setAcceptAsProfileId(e.target.value)}>
               {members.map((m) => (
                 <option key={m.profile.id} value={m.profile.id}>

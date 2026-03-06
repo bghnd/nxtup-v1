@@ -23,10 +23,10 @@ export function Button({
         "disabled:opacity-50 disabled:cursor-not-allowed",
         size === "sm" ? "h-8 px-3 text-sm" : "h-10 px-4 text-sm",
         variant === "primary" &&
-          "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800",
+          "bg-primary text-white hover:bg-primary-hover active:bg-blue-800",
         variant === "secondary" &&
-          "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50",
-        variant === "ghost" && "bg-transparent text-slate-700 hover:bg-slate-100",
+          "bg-card text-foreground border border-border hover:bg-accent",
+        variant === "ghost" && "bg-transparent text-foreground-muted hover:bg-accent-hover",
         className
       )}
       {...props}

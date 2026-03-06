@@ -188,10 +188,10 @@ function DroppableAddListButton({
       ref={dropRef as any}
       onClick={onAddClick}
       className={cn(
-        "w-[320px] shrink-0 rounded-xl border-2 border-dashed p-6 text-center text-sm font-medium transition flex items-center justify-center",
+        "w-[320px] shrink-0 rounded-lg flex items-center justify-center transition-all duration-300 ease-in-out overflow-hidden self-start",
         isOver && canDrop
-          ? "border-blue-400 bg-blue-50/50 text-blue-700"
-          : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+          ? "h-[240px] border-2 border-dashed border-primary bg-primary-50/50 text-primary text-sm font-medium"
+          : "h-[40px] border border-dashed border-border text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted text-xs font-medium"
       )}
     >
       + Add list
@@ -224,8 +224,8 @@ function DroppableAddGroupButton({
       className={cn(
         "mt-8 mb-12 w-full rounded-xl border-2 border-dashed p-8 text-center text-sm font-medium transition flex items-center justify-center",
         isOver && canDrop
-          ? "border-blue-400 bg-blue-50/50 text-blue-700"
-          : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+          ? "border-primary bg-primary-50/50 text-primary"
+          : "border-border text-muted-foreground hover:border-border-hover hover:bg-accent hover:text-foreground-muted"
       )}
     >
       + Add Group
@@ -275,14 +275,14 @@ function DroppableGroupHeader({
       ref={dropRef as any}
       className={cn(
         "flex items-start justify-between gap-3 rounded-xl p-3 -mx-3 transition-colors",
-        isOver && canDrop ? "border-2 border-dashed border-blue-400 bg-blue-50/50" : "border-2 border-transparent"
+        isOver && canDrop ? "border-2 border-dashed border-primary bg-primary-50/50" : "border-2 border-transparent"
       )}
     >
       <div className="min-w-0 flex-1">
         <InlineEditableText
           value={group.title}
           ariaLabel={`Rename group ${group.title}`}
-          className="block w-full text-lg font-semibold text-slate-900"
+          className="block w-full text-lg font-semibold text-foreground"
           inputClassName="h-9 text-lg font-semibold"
           onConfirm={async (next) => {
             await updateTaskGroup({ id: group.id, title: next });
@@ -295,7 +295,7 @@ function DroppableGroupHeader({
           ariaLabel="Edit group description"
           allowEmpty
           truncate={false}
-          className="mt-1 block w-full text-sm text-slate-500 whitespace-normal"
+          className="mt-1 block w-full text-sm text-muted-foreground whitespace-normal"
           inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
           onConfirm={async (next) => {
             await updateTaskGroup({
@@ -305,7 +305,7 @@ function DroppableGroupHeader({
             await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
           }}
         />
-        <div className="mt-1 text-xs text-slate-400">
+        <div className="mt-1 text-xs text-muted">
           {groupListsLength} {groupListsLength === 1 ? "list" : "lists"} • {groupVisibleTaskCount}{" "}
           {groupVisibleTaskCount === 1 ? "task" : "tasks"}
         </div>
@@ -332,7 +332,7 @@ function DroppableGroupHeader({
           size="sm"
           onClick={onAddList}
         >
-          <Plus size={16} className="text-slate-600" />
+          <Plus size={16} className="text-muted-foreground" />
           Add list
         </Button>
         <Button
@@ -924,7 +924,7 @@ export function BoardPage() {
             <InlineEditableText
               value={workspaceName}
               ariaLabel="Rename workspace"
-              className="text-2xl font-semibold text-slate-900"
+              className="text-2xl font-semibold text-foreground"
               inputClassName="h-9 text-2xl font-semibold"
               onConfirm={async (next) => {
                 await updateWorkspace({ id: workspaceId as any, name: next });
@@ -949,7 +949,7 @@ export function BoardPage() {
               ariaLabel="Edit workspace description"
               allowEmpty
               truncate={false}
-              className="block w-full text-sm text-slate-500"
+              className="block w-full text-sm text-muted-foreground"
               // Minimal inline editor: no new “box” chrome, just text-on-background.
               inputClassName="h-8 text-sm border-0 bg-transparent px-0 rounded-none focus:ring-0"
               onConfirm={async (next) => {
@@ -967,7 +967,7 @@ export function BoardPage() {
 
         <div className="flex items-center gap-2">
           <Button variant="secondary">
-            <Users size={16} className="text-slate-600" />
+            <Users size={16} className="text-muted-foreground" />
             Team Members
           </Button>
           <div ref={addMenuRef} className="relative flex shadow-sm rounded-lg">
@@ -997,14 +997,14 @@ export function BoardPage() {
 
             {addMenuOpen ? (
               <div
-                className="absolute right-0 top-[110%] w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-card z-20"
+                className="absolute right-0 top-[110%] w-56 rounded-xl border border-border bg-card p-1 shadow-card z-20"
                 role="menu"
               >
 
                 <button
                   className={cn(
                     "w-full rounded-lg px-3 py-2 text-left text-sm",
-                    ungroupedLists.length >= 3 ? "text-slate-400 cursor-not-allowed" : "text-slate-700 hover:bg-slate-50"
+                    ungroupedLists.length >= 3 ? "text-muted cursor-not-allowed" : "text-foreground-muted hover:bg-accent"
                   )}
                   role="menuitem"
                   disabled={ungroupedLists.length >= 3}
@@ -1016,11 +1016,11 @@ export function BoardPage() {
                   }}
                 >
                   Add List (ungrouped)
-                  <div className="text-xs text-slate-500">Up to 3 per workspace</div>
+                  <div className="text-xs text-muted-foreground">Up to 3 per workspace</div>
                 </button>
 
                 <button
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-foreground-muted hover:bg-accent"
                   role="menuitem"
                   onClick={() => {
                     setAddMenuOpen(false);
@@ -1040,16 +1040,16 @@ export function BoardPage() {
       <div className="mt-5 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm">
-            <Tag size={16} className="text-slate-600" />
+            <Tag size={16} className="text-muted-foreground" />
             Tags
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setDisplayOpen(true)}>
-            <Eye size={16} className="text-slate-600" />
+            <Eye size={16} className="text-muted-foreground" />
             View
           </Button>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-slate-600">
-              <Filter size={14} className="text-slate-500" />
+            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <Filter size={14} className="text-muted-foreground" />
               Priority
             </div>
             <div className="w-[160px]">
@@ -1073,8 +1073,8 @@ export function BoardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-slate-600">
-              <Calendar size={14} className="text-slate-500" />
+            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <Calendar size={14} className="text-muted-foreground" />
               Due
             </div>
             <div className="w-[170px]">
@@ -1284,9 +1284,9 @@ export function BoardPage() {
             }}
           />
           {quickAddSuggestions.length ? (
-            <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
-              <div className="text-xs font-medium text-slate-600">Possible matches</div>
-              <div className="mt-1 text-xs text-slate-500">
+            <div className="mt-2 rounded-lg border border-border bg-card p-2">
+              <div className="text-xs font-medium text-muted-foreground">Possible matches</div>
+              <div className="mt-1 text-xs text-muted-foreground">
                 Press <span className="font-medium">Enter</span> to open the top match. Press{" "}
                 <span className="font-medium">⌘↵</span> to create anyway.
               </div>
@@ -1295,8 +1295,8 @@ export function BoardPage() {
                   <button
                     key={t.id}
                     className={cn(
-                      "w-full rounded-md px-2 py-1 text-left text-sm text-slate-700 hover:bg-slate-50",
-                      idx === quickAddActiveIdx && "bg-blue-50 ring-1 ring-blue-500/20"
+                      "w-full rounded-md px-2 py-1 text-left text-sm text-foreground-muted hover:bg-accent",
+                      idx === quickAddActiveIdx && "bg-primary-50 ring-1 ring-blue-500/20"
                     )}
                     onClick={() => {
                       setDrawerMode("edit");
@@ -1319,8 +1319,8 @@ export function BoardPage() {
         {/* Ungrouped lists (top zone) */}
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <div className="text-xs font-medium text-slate-500">Ungrouped</div>
-            <div className="text-xs text-slate-400">Up to 3 lists</div>
+            <div className="text-xs font-medium text-muted-foreground">Ungrouped Lists</div>
+            <div className="text-xs text-muted">Up to 3 lists</div>
           </div>
           <HorizontalScrollRow dotCount={ungroupedLists.slice(0, 3).length + 1}>
             {/* Standard Ungrouped Lists */}
@@ -1341,14 +1341,14 @@ export function BoardPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-xs font-semibold text-muted-foreground">
                         L
                       </div>
                       <div className="min-w-0">
                         <InlineEditableText
                           value={list.title}
                           ariaLabel={`Rename list ${list.title}`}
-                          className="block w-full font-semibold text-slate-900"
+                          className="block w-full font-semibold text-foreground"
                           onConfirm={async (next) => {
                             await updateTaskList({ id: list.id, title: next });
                             await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
@@ -1360,7 +1360,7 @@ export function BoardPage() {
                           ariaLabel="Edit list description"
                           allowEmpty
                           truncate={false}
-                          className="mt-1 block w-full text-xs text-slate-500 whitespace-normal"
+                          className="mt-1 block w-full text-xs text-muted-foreground whitespace-normal"
                           inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
                           onConfirm={async (next) => {
                             await updateTaskList({
@@ -1372,8 +1372,8 @@ export function BoardPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 font-medium text-foreground-muted">
                         {count}
                       </span>
                       <Button
@@ -1389,7 +1389,7 @@ export function BoardPage() {
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-4 space-y-[2px]">
                     {listTasks.filter(t => t.status !== "done").map((t) => (
                       <DraggableTask
                         key={t.id}
@@ -1404,33 +1404,22 @@ export function BoardPage() {
                         display={display}
                       />
                     ))}
-                    {count === 0 ? (
-                      <button
-                        onClick={() => {
-                          setCreateTargetListId(list.id);
-                          setCreateTargetUnlistedGroupId(undefined);
-                          setDrawerMode("create");
-                          setDrawerOpen(true);
-                          setLastUngroupedListId(list.id);
-                        }}
-                        className="w-full rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 hover:bg-slate-50 transition-colors"
-                      >
-                        Drop tasks here or click to add a task
-                      </button>
-                    ) : null}
-                    {count > 0 && (
-                      <button
-                        onClick={() => {
-                          setCreateTargetListId(list.id);
-                          setCreateTargetUnlistedGroupId(undefined);
-                          setDrawerMode("create");
-                          setDrawerOpen(true);
-                          setLastUngroupedListId(list.id);
-                        }}
-                        className="w-full mt-2 rounded-lg border border-dashed border-slate-200 p-3 text-center text-xs font-medium text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-700 transition-colors"
-                      >
-                        + Add task
-                      </button>
+                    <button
+                      onClick={() => {
+                        setCreateTargetListId(list.id);
+                        setCreateTargetUnlistedGroupId(undefined);
+                        setDrawerMode("create");
+                        setDrawerOpen(true);
+                        setLastUngroupedListId(list.id);
+                      }}
+                      className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
+                    >
+                      + Add task
+                    </button>
+                    {count === 0 && (
+                      <div className="mt-4 text-center text-xs font-semibold text-muted tracking-wide">
+                        OR DROP TASKS HERE
+                      </div>
                     )}
                   </div>
                   <DoneSection
@@ -1473,7 +1462,8 @@ export function BoardPage() {
             <DroppableListCard
               key="unlisted-virtual-list"
               listId="unlisted-virtual-list"
-              className="w-[320px] shrink-0 p-4 border-dashed bg-slate-50/50"
+              flat={true}
+              className="w-[320px] shrink-0 p-4 flex flex-col"
               onTaskDrop={async (taskId, fromListId) => {
                 // If dropped here, we want to REMOVE it from any lists but keep it on the board.
                 const ps = placements.filter((p) => p.taskId === taskId);
@@ -1494,23 +1484,23 @@ export function BoardPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-200 text-xs font-semibold text-slate-500">
+                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent-hover text-xs font-semibold text-muted-foreground">
                     ?
                   </div>
                   <div className="min-w-0">
-                    <div className="block w-full font-semibold text-slate-700">Unlisted Tasks</div>
-                    <div className="mt-1 block w-full text-xs text-slate-400 whitespace-normal">
+                    <div className="block w-full font-semibold text-foreground-muted">Unlisted Tasks</div>
+                    <div className="mt-1 block w-full text-xs text-muted whitespace-normal">
                       Tasks on the board with no list
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 font-medium text-foreground-muted">
                     {(unlistedTasksByGroupId.get(null) ?? []).length}
                   </span>
                 </div>
               </div>
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 space-y-[2px]">
                 {(unlistedTasksByGroupId.get(null) ?? []).filter(t => t.status !== "done").map((t) => (
                   <DraggableTask
                     key={t.id}
@@ -1533,10 +1523,9 @@ export function BoardPage() {
                     setDrawerOpen(true);
                     setLastUngroupedListId(null as any);
                   }}
-                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
                 >
-                  <Plus size={16} />
-                  Add task
+                  + Add task
                 </button>
               </div>
               <DoneSection
@@ -1580,7 +1569,7 @@ export function BoardPage() {
                 key={group.id}
                 className={cn(
                   // Header-only group styling: no outer “card”. Use subtle dividers + spacing.
-                  idx === 0 ? "pt-2" : "mt-6 border-t border-slate-200 pt-6"
+                  idx === 0 ? "pt-2" : "mt-6 border-t border-border pt-6"
                 )}
               >
                 <DroppableGroupHeader
@@ -1642,7 +1631,7 @@ export function BoardPage() {
                                 {person ? (
                                   <Avatar name={person.name} src={person.avatarUrl} className="h-8 w-8 text-xs" />
                                 ) : (
-                                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-xs font-semibold text-muted-foreground">
                                     {list.type === "project" ? "P" : list.type === "time_slot" ? "T" : "L"}
                                   </div>
                                 )}
@@ -1650,7 +1639,7 @@ export function BoardPage() {
                                   <InlineEditableText
                                     value={list.title}
                                     ariaLabel={`Rename list ${list.title}`}
-                                    className="block w-full font-semibold text-slate-900"
+                                    className="block w-full font-semibold text-foreground"
                                     onConfirm={async (next) => {
                                       await updateTaskList({ id: list.id, title: next });
                                       await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
@@ -1662,7 +1651,7 @@ export function BoardPage() {
                                     ariaLabel="Edit list description"
                                     allowEmpty
                                     truncate={false}
-                                    className="mt-1 block w-full text-xs text-slate-500 whitespace-normal"
+                                    className="mt-1 block w-full text-xs text-muted-foreground whitespace-normal"
                                     inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
                                     onConfirm={async (next) => {
                                       await updateTaskList({
@@ -1673,12 +1662,12 @@ export function BoardPage() {
                                     }}
                                   />
                                   {person ? (
-                                    <div className="mt-1 text-xs text-slate-400">Person: {person.name}</div>
+                                    <div className="mt-1 text-xs text-muted">Person: {person.name}</div>
                                   ) : null}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-slate-500">
-                                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 font-medium text-slate-700">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 font-medium text-foreground-muted">
                                   {count}
                                 </span>
                                 <Button
@@ -1695,7 +1684,7 @@ export function BoardPage() {
                               </div>
                             </div>
 
-                            <div className="mt-4 space-y-3">
+                            <div className="mt-4 space-y-[2px]">
                               {listTasks.filter(t => t.status !== "done").map((t) => (
                                 <DraggableTask
                                   key={t.id}
@@ -1709,31 +1698,21 @@ export function BoardPage() {
                                   display={display}
                                 />
                               ))}
-                              {count === 0 ? (
-                                <button
-                                  onClick={() => {
-                                    setCreateTargetListId(list.id);
-                                    setCreateTargetUnlistedGroupId(undefined);
-                                    setDrawerMode("create");
-                                    setDrawerOpen(true);
-                                  }}
-                                  className="w-full rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 hover:bg-slate-50 transition-colors"
-                                >
-                                  Drop tasks here or click to add a task
-                                </button>
-                              ) : null}
-                              {count > 0 && (
-                                <button
-                                  onClick={() => {
-                                    setCreateTargetListId(list.id);
-                                    setCreateTargetUnlistedGroupId(undefined);
-                                    setDrawerMode("create");
-                                    setDrawerOpen(true);
-                                  }}
-                                  className="w-full mt-2 rounded-lg border border-dashed border-slate-200 p-3 text-center text-xs font-medium text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-700 transition-colors"
-                                >
-                                  + Add task
-                                </button>
+                              <button
+                                onClick={() => {
+                                  setCreateTargetListId(list.id);
+                                  setCreateTargetUnlistedGroupId(undefined);
+                                  setDrawerMode("create");
+                                  setDrawerOpen(true);
+                                }}
+                                className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
+                              >
+                                + Add task
+                              </button>
+                              {count === 0 && (
+                                <div className="mt-4 text-center text-xs font-semibold text-muted tracking-wide">
+                                  OR DROP TASKS HERE
+                                </div>
                               )}
                             </div>
                             <DoneSection
@@ -1758,7 +1737,8 @@ export function BoardPage() {
                       {/* Unlisted Tasks for this specific Group */}
                       <DroppableListCard
                         listId={`unlisted-group-${group.id}`}
-                        className="w-[320px] shrink-0 p-4 border-dashed bg-slate-50 border-slate-200 flex flex-col"
+                        flat={true}
+                        className="w-[320px] shrink-0 p-4 flex flex-col"
                         onTaskDrop={async (taskId, fromListId) => {
                           const task = tasksById.get(taskId);
                           if (!task) return;
@@ -1783,9 +1763,9 @@ export function BoardPage() {
                         }}
                       >
                         <div className="mb-4 flex items-center justify-between">
-                          <div className="font-semibold text-slate-900">Unlisted Tasks</div>
+                          <div className="font-semibold text-foreground">Unlisted Tasks</div>
                         </div>
-                        <div className="flex-1 overflow-y-auto space-y-2 pb-2">
+                        <div className="flex-1 overflow-y-auto space-y-[2px] pb-2">
                           {(unlistedTasksByGroupId.get(group.id) ?? []).length === 0 ? (
                             <button
                               onClick={() => {
@@ -1795,7 +1775,7 @@ export function BoardPage() {
                                 setDrawerOpen(true);
                                 setLastUngroupedListId(null as any); // Might need to pass groupId here eventually
                               }}
-                              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-muted-foreground hover:bg-accent-hover hover:text-foreground-muted"
                             >
                               <Plus size={16} />
                               Add task
@@ -1821,7 +1801,7 @@ export function BoardPage() {
                                 setDrawerMode("create");
                                 setDrawerOpen(true);
                               }}
-                              className="w-full mt-2 rounded-lg border border-dashed border-slate-200 p-3 text-center text-xs font-medium text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-700 transition-colors"
+                              className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
                             >
                               + Add task
                             </button>
@@ -2050,7 +2030,7 @@ export function BoardPage() {
           </div>
         }
       >
-        <div className="text-sm text-slate-700">
+        <div className="text-sm text-foreground-muted">
           You’re about to delete <span className="font-medium">{activeTask?.title}</span>.
         </div>
       </Modal>
@@ -2082,7 +2062,7 @@ export function BoardPage() {
           ) : null
         }
       >
-        <div className="text-sm text-slate-700">
+        <div className="text-sm text-foreground-muted">
           This will delete <span className="font-medium">{workspaceModal?.name}</span> and all of its data (groups, lists,
           tasks, placements).
         </div>
@@ -2142,13 +2122,13 @@ export function BoardPage() {
         }
       >
         {groupModal?.mode === "delete" ? (
-          <div className="text-sm text-slate-700">
+          <div className="text-sm text-foreground-muted">
             Delete group <span className="font-medium">{groupModal.title}</span>? Lists in this group will be deleted.
           </div>
         ) : (
           <div className="space-y-3">
             <div>
-              <div className="text-xs font-medium text-slate-600">Title</div>
+              <div className="text-xs font-medium text-muted-foreground">Title</div>
               <Input
                 className="mt-2"
                 autoFocus
@@ -2158,7 +2138,7 @@ export function BoardPage() {
               />
             </div>
             <div>
-              <div className="text-xs font-medium text-slate-600">Description (optional)</div>
+              <div className="text-xs font-medium text-muted-foreground">Description (optional)</div>
               <Input
                 className="mt-2"
                 value={groupDescDraft}
@@ -2167,7 +2147,7 @@ export function BoardPage() {
               />
             </div>
             {groupModal?.mode === "rename" ? (
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-muted-foreground">
                 Want to delete instead?{" "}
                 <button
                   className="text-rose-700 hover:underline"
@@ -2243,13 +2223,13 @@ export function BoardPage() {
         }
       >
         {listModal?.mode === "delete" ? (
-          <div className="text-sm text-slate-700">
+          <div className="text-sm text-foreground-muted">
             Delete list <span className="font-medium">{listModal.title}</span>? Placements in this list will be removed.
           </div>
         ) : (
           <div className="space-y-3">
             <div>
-              <div className="text-xs font-medium text-slate-600">Title</div>
+              <div className="text-xs font-medium text-muted-foreground">Title</div>
               <Input
                 className="mt-2"
                 autoFocus
@@ -2259,28 +2239,28 @@ export function BoardPage() {
               />
             </div>
             <div>
-              <div className="text-xs font-medium text-slate-600">Workspace</div>
+              <div className="text-xs font-medium text-muted-foreground">Workspace</div>
               <Input
-                className="mt-2 bg-slate-50 text-slate-500 cursor-not-allowed"
+                className="mt-2 bg-background text-muted-foreground cursor-not-allowed"
                 disabled
                 value={workspaceQ.data?.name ?? workspaceId}
               />
             </div>
             {listModal?.mode === "create" ? (
               <div>
-                <div className="text-xs font-medium text-slate-600">Type</div>
+                <div className="text-xs font-medium text-muted-foreground">Type</div>
                 <Select className="mt-2" value={listTypeDraft} onChange={(e) => setListTypeDraft(e.target.value as any)}>
                   <option value="person">Person</option>
                   <option value="project">Project</option>
                   <option value="time_slot">Time Slot</option>
                   <option value="other">Other</option>
                 </Select>
-                <div className="mt-2 text-xs text-slate-500">
+                <div className="mt-2 text-xs text-muted-foreground">
                   (For MVP, type affects icon/behavior only. We’ll wire richer type-specific settings later.)
                 </div>
               </div>
             ) : (
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-muted-foreground">
                 Want to delete instead?{" "}
                 <button
                   className="text-rose-700 hover:underline"
@@ -2369,7 +2349,7 @@ export function BoardPage() {
           ) : null
         }
       >
-        <div className="space-y-3 text-sm text-slate-700">
+        <div className="space-y-3 text-sm text-foreground-muted">
           <div>
             We couldn’t find{" "}
             <span className="font-medium">
@@ -2382,7 +2362,7 @@ export function BoardPage() {
             in this workspace.
           </div>
           <div>
-            <div className="text-xs font-medium text-slate-600">Name</div>
+            <div className="text-xs font-medium text-muted-foreground">Name</div>
             <Input
               className="mt-2"
               value={unknownMemberNameDraft}
@@ -2390,14 +2370,14 @@ export function BoardPage() {
             />
           </div>
           <div>
-            <div className="text-xs font-medium text-slate-600">Email (optional)</div>
+            <div className="text-xs font-medium text-muted-foreground">Email (optional)</div>
             <Input
               className="mt-2"
               value={unknownMemberEmailDraft}
               onChange={(e) => setUnknownMemberEmailDraft(e.target.value)}
             />
           </div>
-          <label className="flex items-center gap-2 text-xs text-slate-700">
+          <label className="flex items-center gap-2 text-xs text-foreground-muted">
             <input
               type="checkbox"
               checked={unknownMemberSendInvite}
@@ -2432,7 +2412,7 @@ export function BoardPage() {
           </div>
         }
       >
-        <div className="space-y-3 text-sm text-slate-700">
+        <div className="space-y-3 text-sm text-foreground-muted">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -2475,7 +2455,7 @@ function StatPill({ children, className }: { children: React.ReactNode; classNam
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600",
+        "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground",
         className
       )}
     >

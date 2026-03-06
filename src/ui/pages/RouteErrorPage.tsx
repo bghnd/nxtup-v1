@@ -26,8 +26,8 @@ export function RouteErrorPage() {
     <div className="min-h-[60vh] p-6">
       <div className="mx-auto max-w-[720px]">
         <Card className="p-6">
-          <div className="text-xl font-semibold text-slate-900">{title}</div>
-          <div className="mt-2 text-sm text-slate-600">{message}</div>
+          <div className="text-xl font-semibold text-foreground">{title}</div>
+          <div className="mt-2 text-sm text-muted-foreground">{message}</div>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <Button onClick={() => window.location.reload()}>Reload</Button>
@@ -37,7 +37,7 @@ export function RouteErrorPage() {
           </div>
 
           {err instanceof Error && err.stack ? (
-            <pre className="mt-6 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <pre className="mt-6 overflow-auto rounded-lg border border-border bg-background p-3 text-xs text-foreground-muted">
               {err.stack}
             </pre>
           ) : null}

@@ -14,6 +14,7 @@ export function DroppableListCard({
     onTaskDrop,
     className,
     children,
+    flat,
     ...props
 }: CardProps & {
     listId: string;
@@ -53,7 +54,8 @@ export function DroppableListCard({
     return (
         <Card
             ref={combineRefs as any}
-            className={cn(className, isOver && "ring-2 ring-blue-400 bg-blue-50/50 transition-colors", isDragging && "opacity-50 border-blue-400 border-dashed")}
+            flat={flat}
+            className={cn(className, isOver && "ring-2 ring-primary bg-primary-50/50 transition-colors", isDragging && "opacity-50 border-primary border-dashed")}
             {...props}
         >
             {children}
@@ -73,17 +75,17 @@ export function DoneSection({
     if (tasks.length === 0) return null;
 
     return (
-        <div className="mt-4 pt-4 border-t border-slate-100">
+        <div className="mt-4 pt-4 border-t border-border">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex w-full items-center gap-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                className="flex w-full items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground-muted transition-colors"
             >
                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 Done ({tasks.length})
             </button>
 
             {isOpen && (
-                <div className="mt-3 space-y-3 opacity-75">
+                <div className="mt-3 space-y-[2px] opacity-75">
                     {tasks.map(renderTask)}
                 </div>
             )}

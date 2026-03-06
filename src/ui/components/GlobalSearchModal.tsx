@@ -36,12 +36,12 @@ function SearchResultItem({ task, onClick }: { task: any; onClick: () => void })
                 if (e.key === "Enter") onClick();
             }}
             className={cn(
-                "flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100",
+                "flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm text-foreground-muted hover:bg-accent-hover",
                 isDragging && "opacity-50"
             )}
         >
             <span className="truncate">{task.title}</span>
-            <span className="ml-2 flex-shrink-0 text-xs text-slate-400 capitalize">
+            <span className="ml-2 flex-shrink-0 text-xs text-muted capitalize">
                 {task.location}
             </span>
         </div>
@@ -83,30 +83,30 @@ export function GlobalSearchModal() {
 
     return (
         <Modal open={open} title="Search Tasks" onClose={() => setOpen(false)}>
-            <div className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/5">
+            <div className="w-full max-w-2xl overflow-hidden rounded-xl bg-card shadow-2xl ring-1 ring-slate-900/5">
                 <Command
                     shouldFilter={false} // We filter ourselves
                     className="flex h-full w-full flex-col overflow-hidden"
                 >
-                    <div className="flex items-center border-b border-slate-200 px-4">
+                    <div className="flex items-center border-b border-border px-4">
                         <Command.Input
                             autoFocus
                             value={search}
                             onValueChange={setSearch}
-                            className="flex h-12 w-full min-w-0 bg-transparent text-sm text-slate-900 placeholder-slate-400 outline-none"
+                            className="flex h-12 w-full min-w-0 bg-transparent text-sm text-foreground placeholder-slate-400 outline-none"
                             placeholder="Search tasks anywhere... (Drag results to board)"
                         />
                     </div>
 
                     <Command.List className="max-h-[300px] overflow-y-auto p-2">
                         {!filteredTasks.length && search.length > 0 && (
-                            <Command.Empty className="py-6 text-center text-sm text-slate-500">
+                            <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
                                 No results found.
                             </Command.Empty>
                         )}
 
                         {filteredTasks.length > 0 && (
-                            <Command.Group heading="Tasks" className="text-xs font-medium text-slate-500">
+                            <Command.Group heading="Tasks" className="text-xs font-medium text-muted-foreground">
                                 {filteredTasks.map((task) => (
                                     <Command.Item
                                         key={task.id}
@@ -131,7 +131,7 @@ export function GlobalSearchModal() {
                         )}
 
                         {!search.trim() && (
-                            <div className="py-6 text-center text-sm text-slate-500">
+                            <div className="py-6 text-center text-sm text-muted-foreground">
                                 Type to search for tasks...
                             </div>
                         )}

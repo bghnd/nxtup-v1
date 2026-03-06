@@ -69,7 +69,7 @@ export function InlineEditableText({
         <textarea
           ref={textareaRef}
           className={cn(
-            "w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20",
+            "w-full rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground outline-none focus:ring-2 focus:ring-blue-500/20",
             inputClassName
           )}
           value={draft}
@@ -104,7 +104,7 @@ export function InlineEditableText({
       <input
         ref={inputRef}
         className={cn(
-          "h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20",
+          "h-7 w-full rounded-md border border-border bg-card px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-blue-500/20",
           inputClassName
         )}
         value={draft}

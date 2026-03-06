@@ -30,15 +30,15 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50">
       <button
-        className="absolute inset-0 bg-slate-900/25"
+        className="absolute inset-0 bg-foreground/25"
         aria-label="Close modal"
         onClick={onClose}
       />
       <div className="absolute left-1/2 top-1/2 w-[min(520px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2">
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-card">
+        <div className="rounded-2xl border border-border bg-card shadow-card">
           <div className="px-5 pt-5">
-            <div className="text-lg font-semibold text-slate-900">{title}</div>
-            {description ? <div className="mt-1 text-sm text-slate-500">{description}</div> : null}
+            <div className="text-lg font-semibold text-foreground">{title}</div>
+            {description ? <div className="mt-1 text-sm text-muted-foreground">{description}</div> : null}
           </div>
           <div className="px-5 py-4">{children}</div>
           {footer ? <div className={cn("px-5 pb-5")}>{footer}</div> : null}

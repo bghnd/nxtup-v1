@@ -20,7 +20,7 @@ export function Avatar({
   return (
     <div
       className={cn(
-        "relative inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700",
+        "relative inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-accent-hover text-[11px] font-semibold text-foreground-muted",
         className
       )}
       title={name}

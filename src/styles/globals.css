@@ -2,14 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* App baseline */
-html,
-body {
-  height: 100%;
-}
+@layer base {
+  :root {
+    --background: #f7f8fa;
+    --card: #ffffff;
+    --task: var(--card);
+    --border: #ebecf0;
+    --border-hover: #d9dce1;
+    --foreground: #111214;
+    --foreground-muted: #42526E;
+    --muted-foreground: #7A869A;
+    --muted: #A5ADBA;
+    --accent: #F1F2F5;
+    --accent-hover: #EBECF0;
 
-body {
-  @apply bg-slate-50 text-slate-900;
+    --primary: #5E6AD2;
+    --primary-hover: #4C53B3;
+    --primary-50: #E8ECFD;
+    --primary-100: #D1D8F9;
+    --primary-900: #292D75;
+  }
+
+  .dark {
+    /* CSS Peeper / Claude inspired dark mode colors */
+    --background: #141413;
+    --card: #1C1A18;
+    --task: #0A0908;
+    --border: #30302E;
+    --border-hover: #9C9A92;
+    --foreground: #DEDCD1;
+    --foreground-muted: #C2C0B6;
+    --muted-foreground: #9C9A92;
+    --muted: #45474a;
+    --accent: #30302E;
+    --accent-hover: #9C9A92;
+
+    --primary: #D97757;
+    --primary-hover: #C56648;
+    --primary-50: #2A1A14;
+    --primary-100: #3B241C;
+    --primary-900: #EBA894;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
 }
 
 /* Multiline clamp without Tailwind plugin */
@@ -23,8 +65,7 @@ body {
 /* Nice default focus ring */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 2px rgba(94, 106, 210, 0.5);
+  /* Blurple ring */
   border-radius: 8px;
 }
-
-

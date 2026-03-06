@@ -27,7 +27,7 @@ function StatPill({
     return (
         <span
             className={cn(
-                "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600",
+                "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground",
                 className
             )}
         >
@@ -75,13 +75,14 @@ export function DraggableTask({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={cn(
-                "w-full text-left rounded-xl border border-slate-200 bg-white p-3 shadow-sm hover:shadow-card transition-shadow relative overflow-hidden",
-                isDragging && "opacity-50 border-blue-400 border-dashed"
+                "w-full text-left rounded-xl bg-transparent py-1.5 px-3 hover:bg-accent/50 transition-colors relative overflow-hidden",
+                isDragging && "opacity-50 ring-2 ring-primary border-dashed"
             )}
             onClick={onClick}
+            onDragStart={(e: any) => e.stopPropagation()}
         >
             <div className="flex items-start justify-between gap-3">
-                <div className="text-sm font-medium text-slate-900 line-clamp-2">{task.title}</div>
+                <div className="text-sm font-light text-foreground-muted line-clamp-2">{task.title}</div>
                 {display.showPriority ? (
                     <Badge variant={priorityVariant(task.priority)} className="shrink-0">
                         {task.priority === "critical"
