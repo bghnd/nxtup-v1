@@ -19,12 +19,14 @@ import {
   listWorkspaces,
   listTaskLists,
   listTasks,
+  listGlobalTasks,
   updateWorkspace,
   updateTask
 } from "../../data/client";
 import { getAdapterKind, useMockAdapter, useSupabaseAdapter } from "../../data/adapter";
 import { ContextPanel, type PanelType } from "./contextPanel/ContextPanel";
 import { InboxPanel } from "./contextPanel/InboxPanel";
+import { IndexPanel } from "./contextPanel/IndexPanel";
 import { loadDisplayPrefs } from "../state/displayPrefs";
 import { GlobalSearchModal } from "../components/GlobalSearchModal";
 import { getUniqueName } from "../../utils/nameUtils";
@@ -100,6 +102,8 @@ export function AppLayout() {
       return null;
     }
   });
+
+  const [indexFilter, setIndexFilter] = React.useState<"alpha" | "recent" | "unlisted">("alpha");
 
   const [panelWidth, setPanelWidth] = React.useState<number>(() => {
     try {
@@ -179,6 +183,10 @@ export function AppLayout() {
     queryKey: ["tasks", workspaceId ?? "demo"],
     queryFn: () => listTasks(workspaceId ?? "demo")
   });
+  const globalTasksQ = useQuery({
+    queryKey: ["globalTasks"],
+    queryFn: () => listGlobalTasks()
+  });
   const listsQ = useQuery({
     queryKey: ["taskLists", workspaceId ?? "demo"],
     queryFn: () => listTaskLists(workspaceId ?? "demo")
@@ -188,7 +196,8 @@ export function AppLayout() {
     queryFn: () => listWorkspaces()
   });
   const allTasks = tasksQ.data ?? [];
-  const inboxTasks = allTasks.filter((t) => t.location === "inbox");
+  const allGlobalTasks = globalTasksQ.data ?? [];
+  const inboxTasks = allGlobalTasks.filter((t) => t.location === "inbox");
   const inboxCount = inboxTasks.length;
   const displayPrefs = React.useMemo(() => loadDisplayPrefs(), []);
   const inboxListId = (listsQ.data ?? []).find((l) => l.type === "inbox")?.id ?? null;
@@ -552,6 +561,8 @@ export function AppLayout() {
             panel={panel}
             pinned={panelPinned}
             width={panelWidth}
+            indexFilter={indexFilter}
+            onIndexFilterChange={setIndexFilter}
             onResize={setPanelWidth}
             onTogglePinned={() => setPanelPinned((p) => !p)}
             onClose={() => setPanel(null)}
@@ -572,6 +583,7 @@ export function AppLayout() {
                     assigneeId: opts.keepAssignee ? undefined : null
                   });
                   await qc.invalidateQueries({ queryKey: ["tasks", workspaceId ?? "demo"] });
+                  await qc.invalidateQueries({ queryKey: ["globalTasks"] });
                 }}
               />
             ) : panel === "activity" ? (
@@ -589,12 +601,14 @@ export function AppLayout() {
                 </div>
               </div>
             ) : panel === "index" ? (
-              <div className="p-4">
-                <div className="text-sm font-semibold text-foreground">Global Index</div>
-                <div className="mt-2 text-sm text-muted-foreground">
-                  A categorical listing of all tasks universally. Find tasks regardless of which workspace board they currently live on.
-                </div>
-              </div>
+              <IndexPanel
+                tasks={allGlobalTasks}
+                filter={indexFilter}
+                display={displayPrefs}
+                onOpenTask={(taskId) => {
+                  nav(`${base}/board?task=${encodeURIComponent(taskId)}`);
+                }}
+              />
             ) : (
               <div className="p-4 text-sm text-muted-foreground">
                 This panel is a placeholder for a future phase.

@@ -10,6 +10,7 @@ export const createInvite = (input: any) => getDataAdapter().createInvite(input)
 export const acceptInvite = (input: any) => getDataAdapter().acceptInvite(input);
 
 export const listTasks = (workspaceId: any) => getDataAdapter().listTasks(workspaceId);
+export const listGlobalTasks = () => getDataAdapter().listGlobalTasks();
 export const createTask = (input: any) => getDataAdapter().createTask(input);
 export const updateTask = (input: any) => getDataAdapter().updateTask(input);
 export const deleteTask = (id: any) => getDataAdapter().deleteTask(id);

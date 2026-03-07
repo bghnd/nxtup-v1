@@ -25,8 +25,12 @@ export function DroppableListCard({
     const [{ isOver }, dropRef] = useDrop({
         accept: "TASK",
         drop: (item: { taskId: string; fromListId: string | null }, monitor) => {
+            console.log("[DnD][DroppableListCard] Received drop event", { item, listId });
             // Don't handle drop if an older drop target already handled it
-            if (monitor.didDrop()) return;
+            if (monitor.didDrop()) {
+                console.log("[DnD][DroppableListCard] Ignored because child handled it", { item, listId });
+                return;
+            }
             onTaskDrop(item.taskId, item.fromListId);
         },
         collect: (monitor) => ({

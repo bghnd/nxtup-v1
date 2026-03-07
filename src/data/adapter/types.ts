@@ -30,6 +30,7 @@ export type DataAdapter = {
   createInvite: (input: CreateInviteInput) => Promise<Invite>;
   acceptInvite: (input: { token: string; acceptAsProfileId: string }) => Promise<void>;
   listTasks: (workspaceId: WorkspaceId) => Promise<Task[]>;
+  listGlobalTasks: () => Promise<Task[]>;
   listTaskGroups: (workspaceId: WorkspaceId) => Promise<TaskGroup[]>;
   listTaskLists: (workspaceId: WorkspaceId) => Promise<TaskList[]>;
   listTaskPlacements: (workspaceId: WorkspaceId) => Promise<TaskPlacement[]>;

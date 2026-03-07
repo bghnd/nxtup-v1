@@ -75,6 +75,11 @@ export async function listTasks(workspaceId: WorkspaceId): Promise<Task[]> {
   return tasksDb.filter((t) => t.workspaceId === workspaceId);
 }
 
+export async function listGlobalTasks(): Promise<Task[]> {
+  await sleep(120);
+  return tasksDb; // For mock DB, assume all tasks belong to the current session user
+}
+
 export async function listTaskGroups(workspaceId: WorkspaceId): Promise<TaskGroup[]> {
   await sleep(80);
   return taskGroupsDb

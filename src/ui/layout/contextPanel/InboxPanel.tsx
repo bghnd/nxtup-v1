@@ -1,5 +1,6 @@
 import React from "react";
 import { Inbox } from "lucide-react";
+import { useDrag } from "react-dnd";
 
 import type { Task } from "../../../domain/types";
 import type { DisplayPrefs } from "../../state/displayPrefs";
@@ -99,23 +100,26 @@ function InboxTaskCard({
   onOpen: () => void;
 }) {
   const due = task.dueDate ?? null;
+
+  const [{ isDragging }, dragRef] = useDrag({
+    type: "TASK",
+    item: () => ({ taskId: task.id, fromListId: "l_inbox" }),
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging()
+    })
+  });
+
   return (
     <button
-      className="w-full rounded-xl bg-transparent py-1.5 px-3 text-left hover:bg-accent/50 transition-colors"
+      ref={dragRef as any}
+      className={cn(
+        "w-full rounded-xl bg-transparent py-1.5 px-3 text-left hover:bg-accent/50 transition-colors",
+        isDragging && "opacity-50 ring-2 ring-primary border-dashed"
+      )}
       onClick={onOpen}
-      draggable
-      onDragStart={(e) => {
-        e.stopPropagation();
-        e.dataTransfer.setData("text/plain", task.id);
-        // Source list for inbox tasks is the inbox list; this enables MOVE vs ⌥-COPY semantics.
-        e.dataTransfer.setData(DND_MIME, JSON.stringify({ taskId: task.id, fromListId: "l_inbox" }));
-        // Allow ⌥-drag behaviors (browsers often flip to "copy" when Alt/Option is held).
-        // We still treat this as a move in-app; ⌥ is used as a modifier (e.g. keep assignee).
-        e.dataTransfer.effectAllowed = "copyMove";
-      }}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="text-sm font-medium text-foreground line-clamp-2">{task.title}</div>
+        <div className="text-sm font-light text-foreground-muted line-clamp-2">{task.title}</div>
         {display.showPriority ? (
           <Badge variant={task.priority} className="shrink-0">
             {task.priority === "critical"

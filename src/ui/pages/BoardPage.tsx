@@ -22,6 +22,7 @@ import {
   listTaskLists,
   listTaskPlacements,
   listTasks,
+  listGlobalTasks,
   listTaskParticipants,
   removeTaskParticipant,
   upsertTaskParticipant,
@@ -363,12 +364,15 @@ export function BoardPage() {
         listId,
         createdBy: session.user.id
       });
-      if (fromListId && fromListId !== listId) {
+      // "l_inbox" is a synthetic ID used by the Inbox panel. It is not a real UUID list ID.
+      // Dropping from the index passes `null` as fromListId.
+      if (fromListId && fromListId !== "l_inbox" && fromListId !== listId) {
         await deleteTaskPlacementByTaskAndList({ workspaceId, taskId, listId: fromListId });
       }
       setLastUngroupedListId(listId);
       await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
       await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+      await qc.invalidateQueries({ queryKey: ["globalTasks"] });
     } catch (err) {
       console.error("[DnD] drop failed", err);
     }
@@ -507,8 +511,8 @@ export function BoardPage() {
   });
 
   const tasksQ = useQuery({
-    queryKey: ["tasks", workspaceId],
-    queryFn: () => listTasks(workspaceId)
+    queryKey: ["globalTasks"],
+    queryFn: () => listGlobalTasks()
   });
 
   const groupsQ = useQuery({
@@ -603,8 +607,8 @@ export function BoardPage() {
   );
 
   const unlistedBoardTasks = React.useMemo(
-    () => boardTasks.filter((t) => !canvasTaskIdSet.has(t.id)),
-    [boardTasks, canvasTaskIdSet]
+    () => boardTasks.filter((t) => !canvasTaskIdSet.has(t.id) && t.workspaceId === workspaceId),
+    [boardTasks, canvasTaskIdSet, workspaceId]
   );
 
   function applyFilters(task: Task) {
@@ -872,6 +876,7 @@ export function BoardPage() {
     }
 
     await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+    await qc.invalidateQueries({ queryKey: ["globalTasks"] });
     setQuickAddText("");
     const next = new URLSearchParams(searchParams);
     next.delete("q");
@@ -1156,6 +1161,7 @@ export function BoardPage() {
                 if (last) {
                   const duplicated = await duplicateTask(workspaceId, last.id, session.user.id);
                   await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+                  await qc.invalidateQueries({ queryKey: ["globalTasks"] });
                   await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
                   toast.success("Task duplicated successfully");
                   setQuickAddText("");
@@ -1229,6 +1235,7 @@ export function BoardPage() {
 
                   await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
                   await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+                  await qc.invalidateQueries({ queryKey: ["globalTasks"] });
                   setQuickAddText("");
                   const next = new URLSearchParams(searchParams);
                   next.delete("q");
@@ -1466,20 +1473,25 @@ export function BoardPage() {
               className="w-[320px] shrink-0 p-4 flex flex-col"
               onTaskDrop={async (taskId, fromListId) => {
                 // If dropped here, we want to REMOVE it from any lists but keep it on the board.
-                const ps = placements.filter((p) => p.taskId === taskId);
-                if (ps.length > 0) {
-                  await Promise.all(
-                    ps.map((p) =>
-                      deleteTaskPlacementByTaskAndList({
-                        workspaceId,
-                        taskId,
-                        listId: p.listId
-                      })
-                    )
-                  );
-                  await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+                // Placements should only be deleted if the source list was an actual board list (not the synthetic inbox/index strings)
+                if (fromListId !== "l_inbox") {
+                  const ps = placements.filter((p) => p.taskId === taskId);
+                  if (ps.length > 0) {
+                    await Promise.all(
+                      ps.map((p) =>
+                        deleteTaskPlacementByTaskAndList({
+                          workspaceId,
+                          taskId,
+                          listId: p.listId
+                        })
+                      )
+                    );
+                    await qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+                    await qc.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+                    await qc.invalidateQueries({ queryKey: ["globalTasks"] });
+                  }
                 }
-                updateTask({ id: taskId, location: "board", groupId: null, assigneeId: null });
+                await updateTask({ id: taskId, location: "board", groupId: null, assigneeId: null });
               }}
             >
               <div className="flex items-start justify-between gap-3">

@@ -14,6 +14,8 @@ export function ContextPanel({
   onClose,
   onTogglePinned,
   onSelectPanel,
+  indexFilter,
+  onIndexFilterChange,
   children
 }: {
   panel: PanelType;
@@ -23,6 +25,8 @@ export function ContextPanel({
   onClose: () => void;
   onTogglePinned: () => void;
   onSelectPanel: (panel: PanelType) => void;
+  indexFilter: "alpha" | "recent" | "unlisted";
+  onIndexFilterChange: (filter: "alpha" | "recent" | "unlisted") => void;
   children: React.ReactNode;
 }) {
   const dragging = React.useRef(false);
@@ -115,11 +119,26 @@ export function ContextPanel({
           )}
           {panel === "index" && (
             <>
-              <button className="hover:text-foreground transition-colors">A-Z</button>
+              <button
+                className={cn("transition-colors", indexFilter === "alpha" ? "text-foreground" : "hover:text-foreground")}
+                onClick={() => onIndexFilterChange("alpha")}
+              >
+                A-Z
+              </button>
               <span>&bull;</span>
-              <button className="hover:text-foreground transition-colors">Recent</button>
+              <button
+                className={cn("transition-colors", indexFilter === "recent" ? "text-foreground" : "hover:text-foreground")}
+                onClick={() => onIndexFilterChange("recent")}
+              >
+                Recent
+              </button>
               <span>&bull;</span>
-              <button className="hover:text-foreground transition-colors">Unlisted</button>
+              <button
+                className={cn("transition-colors", indexFilter === "unlisted" ? "text-foreground" : "hover:text-foreground")}
+                onClick={() => onIndexFilterChange("unlisted")}
+              >
+                Unlisted
+              </button>
             </>
           )}
         </div>

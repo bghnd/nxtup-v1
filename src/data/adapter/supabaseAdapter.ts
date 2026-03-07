@@ -213,6 +213,32 @@ export const supabaseAdapter: DataAdapter = {
     return (data ?? []).map(mapTask);
   },
 
+  async listGlobalTasks() {
+    assertEnv();
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) return [];
+    const userId = session.session.user.id;
+
+    // Get workspaces where user is a member
+    const { data: memberRows, error: memberError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("profile_id", userId);
+
+    if (memberError || !memberRows) return [];
+
+    const workspaceIds = memberRows.map((r) => r.workspace_id);
+    if (workspaceIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .in("workspace_id", workspaceIds);
+
+    if (error) throw error;
+    return (data ?? []).map(mapTask);
+  },
+
   async listTaskGroups(workspaceId: WorkspaceId) {
     assertEnv();
     if (!isValidUUID(workspaceId)) return [];
