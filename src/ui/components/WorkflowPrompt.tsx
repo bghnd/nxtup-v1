@@ -18,7 +18,7 @@ export function WorkflowPrompt() {
     }, []);
 
     return (
-        <div className="shrink-0 p-4 pt-0">
+        <div>
             <div className="mb-2 flex items-center justify-between text-xs font-medium text-muted-foreground px-1">
                 <div className="flex items-center gap-4">
                     <button className="hover:text-foreground transition-colors" aria-label="Back">

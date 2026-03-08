@@ -29,6 +29,7 @@ import { InboxPanel } from "./contextPanel/InboxPanel";
 import { IndexPanel } from "./contextPanel/IndexPanel";
 import { loadDisplayPrefs } from "../state/displayPrefs";
 import { GlobalSearchModal } from "../components/GlobalSearchModal";
+import { WorkflowPrompt } from "../components/WorkflowPrompt";
 import { getUniqueName } from "../../utils/nameUtils";
 
 const COLLAPSED_KEY = "nxtup.sidebar.collapsed.v1";
@@ -637,7 +638,7 @@ export function AppLayout() {
                 ) : null}
                 <div className="flex items-center gap-2">
                   <select
-                    className="hidden h-9 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm px-2 text-sm text-foreground-muted md:block focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="hidden h-9 rounded-md border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm px-3 text-sm text-foreground-muted md:block focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
                     value={session.user.id}
                     onChange={(e) => setUser(e.target.value)}
                     aria-label="Switch user (stub)"
@@ -651,7 +652,7 @@ export function AppLayout() {
                     ))}
                   </select>
                   <select
-                    className="hidden h-9 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm px-2 text-sm text-foreground-muted md:block focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="hidden h-9 rounded-md border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm px-3 text-sm text-foreground-muted md:block focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
                     value={session.workspaceRole}
                     onChange={(e) => setWorkspaceRole(e.target.value as any)}
                     aria-label="Switch role (stub)"
@@ -688,6 +689,17 @@ export function AppLayout() {
         </main>
       </div>
       <GlobalSearchModal />
+      {/* Workflow Prompt — always-present floating chat bar, left-aligned to main content */}
+      <div
+        className="fixed bottom-6 z-50"
+        style={{
+          left: (effectiveSidebarCollapsed ? 76 : 240) + (panel ? panelWidth : 0) + 24,
+          right: 24,
+          maxWidth: 680,
+        }}
+      >
+        <WorkflowPrompt />
+      </div>
     </div>
   );
 }

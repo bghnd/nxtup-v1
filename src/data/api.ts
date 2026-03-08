@@ -462,6 +462,7 @@ export type CreateTaskGroupInput = {
   workspaceId: WorkspaceId;
   title: string;
   description?: string | null;
+  sortOrder?: number;
 };
 
 export async function createTaskGroup(input: CreateTaskGroupInput): Promise<TaskGroup> {
@@ -473,7 +474,7 @@ export async function createTaskGroup(input: CreateTaskGroupInput): Promise<Task
     workspaceId: input.workspaceId,
     title: input.title.trim() || "Untitled Group",
     description: input.description ?? null,
-    sortOrder: maxSort + 100
+    sortOrder: input.sortOrder ?? maxSort + 100
   };
   taskGroupsDb = [...taskGroupsDb, group];
   return group;

@@ -259,7 +259,7 @@ export const supabaseAdapter: DataAdapter = {
         workspace_id: input.workspaceId,
         title: input.title.trim() || "Untitled Group",
         description: input.description,
-        sort_order: Math.floor(Date.now() / 1000),
+        sort_order: input.sortOrder ?? Math.floor(Date.now() / 1000),
         created_by: userId
       })
       .select("*")

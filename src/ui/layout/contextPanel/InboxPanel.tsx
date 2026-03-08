@@ -7,7 +7,6 @@ import type { DisplayPrefs } from "../../state/displayPrefs";
 import { cn } from "../../lib/cn";
 import { Badge } from "../../components/Badge";
 import { Input } from "../../components/Input";
-import { WorkflowPrompt } from "../../components/WorkflowPrompt";
 
 const DND_MIME = "application/x-nxtup-task";
 
@@ -55,7 +54,7 @@ export function InboxPanel({
         onDropTaskToInbox(taskId, { keepAssignee: e.altKey });
       }}
     >
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col pb-6">
         <div className="flex items-start gap-2">
           <Inbox size={24} className="text-muted-foreground mr-1 mt-1" />
           <div>
@@ -71,7 +70,7 @@ export function InboxPanel({
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-4">
+        <div className="mt-5 flex flex-col gap-4 flex-1 min-h-0">
           <div className="w-full">
             <Input
               className="rounded-full bg-transparent border border-blue-200 h-10 px-4 text-slate-400 placeholder:text-blue-300 font-medium transition-colors hover:bg-blue-50/50 focus-visible:bg-blue-100 focus-visible:border-transparent focus-visible:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-400 group-focus-within:bg-blue-100"
@@ -83,7 +82,7 @@ export function InboxPanel({
 
           <div
             className={cn(
-              "rounded-xl border border-border bg-card p-3 transition-colors",
+              "rounded-xl border border-border bg-card p-3 transition-colors flex-1 min-h-0 overflow-y-auto",
               isOver && "bg-blue-50/40 ring-2 ring-blue-500/20 ring-inset"
             )}
           >
@@ -108,9 +107,6 @@ export function InboxPanel({
           </div>
         </div>
       </div>
-
-      {/* Feature #4: AI Chat Component -> Workflow Prompt */}
-      <WorkflowPrompt />
     </div>
   );
 }

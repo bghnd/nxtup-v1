@@ -188,14 +188,15 @@ function DroppableAddListButton({
     <button
       ref={dropRef as any}
       onClick={onAddClick}
+      aria-label="Add list"
       className={cn(
-        "w-[320px] shrink-0 rounded-lg flex items-center justify-center transition-all duration-300 ease-in-out overflow-hidden self-start",
+        "shrink-0 flex items-center justify-center transition-all duration-300 ease-in-out overflow-hidden self-stretch",
         isOver && canDrop
-          ? "h-[240px] border-2 border-dashed border-primary bg-primary-50/50 text-primary text-sm font-medium"
-          : "h-[40px] border border-dashed border-border text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted text-xs font-medium"
+          ? "w-[320px] rounded-lg border-2 border-dashed border-primary bg-primary-50/50 text-primary"
+          : "w-[44px] border-l-2 border-dashed border-border text-muted hover:border-border-hover hover:text-muted-foreground hover:bg-accent"
       )}
     >
-      + Add list
+      <Plus size={isOver && canDrop ? 20 : 14} />
     </button>
   );
 }
@@ -222,14 +223,15 @@ function DroppableAddGroupButton({
     <button
       ref={dropRef as any}
       onClick={onAddClick}
+      aria-label="Add group"
       className={cn(
-        "mt-8 mb-12 w-full rounded-xl border-2 border-dashed p-8 text-center text-sm font-medium transition flex items-center justify-center",
+        "group mt-8 mb-12 w-full p-8 flex items-center justify-center transition border-t-2 border-dashed",
         isOver && canDrop
-          ? "border-primary bg-primary-50/50 text-primary"
-          : "border-border text-muted-foreground hover:border-border-hover hover:bg-accent hover:text-foreground-muted"
+          ? "border-primary bg-primary-50/50"
+          : "border-border hover:border-border-hover hover:bg-accent"
       )}
     >
-      + Add Group
+      <Plus size={13} className="text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>
   );
 }
@@ -329,14 +331,7 @@ function DroppableGroupHeader({
         >
           {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
         </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onAddList}
-        >
-          <Plus size={16} className="text-muted-foreground" />
-          Add list
-        </Button>
+
         <Button
           variant="ghost"
           size="sm"
@@ -427,7 +422,7 @@ export function BoardPage() {
 
   const [groupModal, setGroupModal] = React.useState<
     | null
-    | { mode: "create" }
+    | { mode: "create"; insertAfterSortOrder?: number }
     | { mode: "rename"; id: string; title: string; description: string | null }
     | { mode: "delete"; id: string; title: string }
   >(null);
@@ -1462,15 +1457,13 @@ export function BoardPage() {
                         setDrawerOpen(true);
                         setLastUngroupedListId(list.id);
                       }}
-                      className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
+                      className="group w-full mt-2 h-8 flex items-center gap-2 rounded-md transition-colors"
+                      aria-label="Add task"
                     >
-                      + Add task
+                      <Plus size={12} className="shrink-0 text-muted group-hover:text-muted-foreground transition-colors" />
+                      <div className="flex-1 h-[2px] bg-transparent group-hover:bg-border transition-colors rounded-full" />
                     </button>
-                    {count === 0 && (
-                      <div className="mt-4 text-center text-xs font-semibold text-muted tracking-wide">
-                        OR DROP TASKS HERE
-                      </div>
-                    )}
+
                   </div>
                   <DoneSection
                     tasks={listTasks.filter((t) => t.status === "done")}
@@ -1538,17 +1531,7 @@ export function BoardPage() {
               }}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent-hover text-xs font-semibold text-muted-foreground">
-                    ?
-                  </div>
-                  <div className="min-w-0">
-                    <div className="block w-full font-semibold text-foreground-muted">Unlisted Tasks</div>
-                    <div className="mt-1 block w-full text-xs text-muted whitespace-normal">
-                      Tasks on the board with no list
-                    </div>
-                  </div>
-                </div>
+                <div className="text-xs font-medium text-muted-foreground">Unlisted Tasks</div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 font-medium text-foreground-muted">
                     {(unlistedTasksByGroupId.get(null) ?? []).length}
@@ -1578,9 +1561,11 @@ export function BoardPage() {
                     setDrawerOpen(true);
                     setLastUngroupedListId(null as any);
                   }}
-                  className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
+                  className="group w-full mt-2 h-8 flex items-center justify-center gap-1.5 rounded-md transition-colors"
+                  aria-label="Add task"
                 >
-                  + Add task
+                  <Plus size={12} className="shrink-0 text-muted group-hover:text-muted-foreground transition-colors" />
+                  <div className="flex-1 h-[2px] bg-transparent group-hover:bg-border transition-colors rounded-full" />
                 </button>
               </div>
               <DoneSection
@@ -1620,278 +1605,297 @@ export function BoardPage() {
               return set.size;
             })();
             return (
-              <section
-                key={group.id}
-                className={cn(
-                  // Header-only group styling: no outer “card”. Use subtle dividers + spacing.
-                  idx === 0 ? "pt-2" : "mt-6 border-t border-border pt-6"
+              <React.Fragment key={group.id}>
+                {idx > 0 && (
+                  <button
+                    onClick={() => {
+                      const sortedGroups = groups.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+                      const prev = sortedGroups[idx - 1];
+                      const next = sortedGroups[idx];
+                      const insertAfterSortOrder = prev && next
+                        ? (prev.sortOrder + next.sortOrder) / 2
+                        : prev
+                          ? prev.sortOrder + 1
+                          : 0;
+                      setGroupModal({ mode: "create", insertAfterSortOrder });
+                    }}
+                    className="group w-full flex items-center gap-2 py-3"
+                    aria-label="Create group here"
+                    title="Click to add a group between these sections"
+                  >
+                    <Plus size={13} className="shrink-0 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex-1 h-px bg-border group-hover:bg-border-hover transition-colors" />
+                  </button>
                 )}
-              >
-                <DroppableGroupHeader
-                  group={group}
-                  groupListsLength={groupLists.length}
-                  groupVisibleTaskCount={groupVisibleTaskCount}
-                  isCollapsed={isCollapsed}
-                  workspaceId={workspaceId}
-                  onToggleCollapse={(collapsed) => setCollapsedGroupsById((prev) => ({ ...prev, [group.id]: collapsed }))}
-                  onToggleCollapseAll={(collapsed) => {
-                    setCollapsedGroupsById((prev) => {
-                      const next = { ...prev };
-                      for (const g of groups) next[g.id] = collapsed;
-                      return next;
-                    });
-                  }}
-                  onAddList={() => {
-                    setListTitleDraft("");
-                    setListTypeDraft("other");
-                    setListModal({ mode: "create", groupId: group.id });
-                  }}
-                  onDeleteGroup={() => setGroupModal({ mode: "delete", id: group.id, title: group.title })}
-                  onDropList={async (listId) => {
-                    await updateTaskList({ id: listId, groupId: group.id });
-                    await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                  }}
-                />
+                <section
+                  className={idx === 0 ? "pt-2" : "pt-4"}
+                >
+                  <DroppableGroupHeader
+                    group={group}
+                    groupListsLength={groupLists.length}
+                    groupVisibleTaskCount={groupVisibleTaskCount}
+                    isCollapsed={isCollapsed}
+                    workspaceId={workspaceId}
+                    onToggleCollapse={(collapsed) => setCollapsedGroupsById((prev) => ({ ...prev, [group.id]: collapsed }))}
+                    onToggleCollapseAll={(collapsed) => {
+                      setCollapsedGroupsById((prev) => {
+                        const next = { ...prev };
+                        for (const g of groups) next[g.id] = collapsed;
+                        return next;
+                      });
+                    }}
+                    onAddList={() => {
+                      setListTitleDraft("");
+                      setListTypeDraft("other");
+                      setListModal({ mode: "create", groupId: group.id });
+                    }}
+                    onDeleteGroup={() => setGroupModal({ mode: "delete", id: group.id, title: group.title })}
+                    onDropList={async (listId) => {
+                      await updateTaskList({ id: listId, groupId: group.id });
+                      await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                    }}
+                  />
 
-                {isCollapsed ? null : (
-                  <div className="mt-4">
-                    <HorizontalScrollRow dotCount={groupLists.length}>
-                      {groupLists.map((list) => {
-                        const listPlacements = placementsByList.get(list.id) ?? [];
-                        const listTasks = listPlacements
-                          .map((p) => tasksById.get(p.taskId))
-                          .filter((t): t is Task => t != null && filteredTaskIdSet.has(t.id));
-                        const count = listTasks.length;
+                  {isCollapsed ? null : (
+                    <div className="mt-4">
+                      <HorizontalScrollRow dotCount={groupLists.length}>
+                        {groupLists.map((list) => {
+                          const listPlacements = placementsByList.get(list.id) ?? [];
+                          const listTasks = listPlacements
+                            .map((p) => tasksById.get(p.taskId))
+                            .filter((t): t is Task => t != null && filteredTaskIdSet.has(t.id));
+                          const count = listTasks.length;
 
-                        const person =
-                          list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
+                          const person =
+                            list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
 
-                        return (
-                          <DroppableListCard
-                            key={list.id}
-                            listId={list.id}
-                            listGroupId={list.groupId}
-                            isDraggable={list.type !== "inbox"}
-                            className="w-[320px] shrink-0 p-4"
-                            onTaskDrop={(taskId, fromListId) => {
-                              const person = list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
-                              if (list.type === "person" && person) {
-                                updateTask({ id: taskId, assigneeId: person.id, location: "board" });
-                              }
-                              handleTaskDrop(taskId, list.id, fromListId);
-                            }}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-2">
-                                {person ? (
-                                  <Avatar name={person.name} src={person.avatarUrl} className="h-8 w-8 text-xs" />
-                                ) : (
-                                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-xs font-semibold text-muted-foreground">
-                                    {list.type === "project" ? "P" : list.type === "time_slot" ? "T" : "L"}
-                                  </div>
-                                )}
-                                <div className="min-w-0">
-                                  <InlineEditableText
-                                    value={list.title}
-                                    ariaLabel={`Rename list ${list.title}`}
-                                    className="block w-full font-semibold text-foreground"
-                                    onConfirm={async (next) => {
-                                      await updateTaskList({ id: list.id, title: next });
-                                      await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                                    }}
-                                  />
-                                  <InlineEditableText
-                                    value={list.description ?? ""}
-                                    placeholder="Add list description…"
-                                    ariaLabel="Edit list description"
-                                    allowEmpty
-                                    truncate={false}
-                                    className="mt-1 block w-full text-xs text-muted-foreground whitespace-normal"
-                                    inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
-                                    onConfirm={async (next) => {
-                                      await updateTaskList({
-                                        id: list.id,
-                                        description: next.trim().length ? next.trim() : null
-                                      });
-                                      await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                                    }}
-                                  />
+                          return (
+                            <DroppableListCard
+                              key={list.id}
+                              listId={list.id}
+                              listGroupId={list.groupId}
+                              isDraggable={list.type !== "inbox"}
+                              className="w-[320px] shrink-0 p-4"
+                              onTaskDrop={(taskId, fromListId) => {
+                                const person = list.type === "person" && list.refId ? profiles.find((p) => p.id === list.refId) ?? null : null;
+                                if (list.type === "person" && person) {
+                                  updateTask({ id: taskId, assigneeId: person.id, location: "board" });
+                                }
+                                handleTaskDrop(taskId, list.id, fromListId);
+                              }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-2">
                                   {person ? (
-                                    <div className="mt-1 text-xs text-muted">Person: {person.name}</div>
-                                  ) : null}
+                                    <Avatar name={person.name} src={person.avatarUrl} className="h-8 w-8 text-xs" />
+                                  ) : (
+                                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-xs font-semibold text-muted-foreground">
+                                      {list.type === "project" ? "P" : list.type === "time_slot" ? "T" : "L"}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <InlineEditableText
+                                      value={list.title}
+                                      ariaLabel={`Rename list ${list.title}`}
+                                      className="block w-full font-semibold text-foreground"
+                                      onConfirm={async (next) => {
+                                        await updateTaskList({ id: list.id, title: next });
+                                        await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                                      }}
+                                    />
+                                    <InlineEditableText
+                                      value={list.description ?? ""}
+                                      placeholder="Add list description…"
+                                      ariaLabel="Edit list description"
+                                      allowEmpty
+                                      truncate={false}
+                                      className="mt-1 block w-full text-xs text-muted-foreground whitespace-normal"
+                                      inputClassName="h-7 text-xs border-0 bg-transparent px-0 rounded-none focus:ring-0"
+                                      onConfirm={async (next) => {
+                                        await updateTaskList({
+                                          id: list.id,
+                                          description: next.trim().length ? next.trim() : null
+                                        });
+                                        await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                                      }}
+                                    />
+                                    {person ? (
+                                      <div className="mt-1 text-xs text-muted">Person: {person.name}</div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 font-medium text-foreground-muted">
+                                    {count}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    aria-label="List actions"
+                                    title="Delete list"
+                                    onClick={() => {
+                                      setListModal({ mode: "delete", id: list.id, title: list.title });
+                                    }}
+                                  >
+                                    <MoreHorizontal size={18} />
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 font-medium text-foreground-muted">
-                                  {count}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  aria-label="List actions"
-                                  title="Delete list"
-                                  onClick={() => {
-                                    setListModal({ mode: "delete", id: list.id, title: list.title });
-                                  }}
-                                >
-                                  <MoreHorizontal size={18} />
-                                </Button>
-                              </div>
-                            </div>
 
-                            <div className="mt-4 space-y-[2px]">
-                              {listTasks.filter(t => t.status !== "done").map((t) => (
-                                <DraggableTask
-                                  key={t.id}
-                                  task={t}
-                                  fromListId={list.id}
+                              <div className="mt-4 space-y-[2px]">
+                                {listTasks.filter(t => t.status !== "done").map((t) => (
+                                  <DraggableTask
+                                    key={t.id}
+                                    task={t}
+                                    fromListId={list.id}
+                                    onClick={() => {
+                                      setDrawerMode("edit");
+                                      setActiveTaskId(t.id);
+                                      setDrawerOpen(true);
+                                    }}
+                                    display={display}
+                                  />
+                                ))}
+                                <button
                                   onClick={() => {
-                                    setDrawerMode("edit");
-                                    setActiveTaskId(t.id);
+                                    setCreateTargetListId(list.id);
+                                    setCreateTargetUnlistedGroupId(undefined);
+                                    setDrawerMode("create");
                                     setDrawerOpen(true);
                                   }}
-                                  display={display}
-                                />
-                              ))}
+                                  className="group w-full mt-2 h-8 flex items-center gap-2 rounded-md transition-colors"
+                                  aria-label="Add task"
+                                >
+                                  <Plus size={12} className="shrink-0 text-muted group-hover:text-muted-foreground transition-colors" />
+                                  <div className="flex-1 h-[2px] bg-transparent group-hover:bg-border transition-colors rounded-full" />
+                                </button>
+
+                              </div>
+                              <DoneSection
+                                tasks={listTasks.filter((t) => t.status === "done")}
+                                renderTask={(t) => (
+                                  <DraggableTask
+                                    key={t.id}
+                                    task={t}
+                                    fromListId={list.id}
+                                    onClick={() => {
+                                      setDrawerMode("edit");
+                                      setActiveTaskId(t.id);
+                                      setDrawerOpen(true);
+                                    }}
+                                    display={display}
+                                  />
+                                )}
+                              />
+                            </DroppableListCard>
+                          );
+                        })}
+                        {/* Unlisted Tasks for this specific Group */}
+                        <DroppableListCard
+                          listId={`unlisted-group-${group.id}`}
+                          flat={true}
+                          className="w-[320px] shrink-0 p-4 flex flex-col"
+                          onTaskDrop={async (taskId, fromListId) => {
+                            const task = tasksById.get(taskId);
+                            if (!task) return;
+
+                            // 1. Delete placement from old list (if it was in one)
+                            if (fromListId) {
+                              await deleteTaskPlacementByTaskAndList({
+                                workspaceId,
+                                taskId,
+                                listId: fromListId,
+                              });
+                            }
+
+                            // 2. Assign specifically to this Group
+                            await updateTask({ id: taskId, location: "board", groupId: group.id });
+
+                            // 3. Invalidate
+                            await Promise.all([
+                              qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] }),
+                              qc.invalidateQueries({ queryKey: ["tasks", workspaceId] }),
+                            ]);
+                          }}
+                        >
+                          <div className="mb-3 flex items-center justify-between">
+                            <div className="text-xs font-medium text-muted-foreground">Unlisted Tasks</div>
+                          </div>
+                          <div className="flex-1 overflow-y-auto space-y-[2px] pb-2">
+                            {(unlistedTasksByGroupId.get(group.id) ?? []).length === 0 ? (
                               <button
                                 onClick={() => {
-                                  setCreateTargetListId(list.id);
-                                  setCreateTargetUnlistedGroupId(undefined);
+                                  setCreateTargetListId(null);
+                                  setCreateTargetUnlistedGroupId(group.id);
+                                  setDrawerMode("create");
+                                  setDrawerOpen(true);
+                                  setLastUngroupedListId(null as any);
+                                }}
+                                className="group w-full mt-2 h-8 flex items-center gap-2 rounded-md transition-colors"
+                                aria-label="Add task"
+                              >
+                                <Plus size={12} className="shrink-0 text-muted group-hover:text-muted-foreground transition-colors" />
+                                <div className="flex-1 h-[2px] bg-transparent group-hover:bg-border transition-colors rounded-full" />
+                              </button>
+                            ) : null}
+                            {(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "active").map((t) => (
+                              <DraggableTask
+                                key={t.id}
+                                task={t}
+                                fromListId={null}
+                                onClick={() => {
+                                  setDrawerMode("edit");
+                                  setActiveTaskId(t.id);
+                                  setDrawerOpen(true);
+                                }}
+                                display={display}
+                              />
+                            ))}
+                            {(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "active").length > 0 && (
+                              <button
+                                onClick={() => {
                                   setDrawerMode("create");
                                   setDrawerOpen(true);
                                 }}
-                                className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
+                                className="group w-full mt-2 h-8 flex items-center gap-2 rounded-md transition-colors"
+                                aria-label="Add task"
                               >
-                                + Add task
+                                <Plus size={12} className="shrink-0 text-muted group-hover:text-muted-foreground transition-colors" />
+                                <div className="flex-1 h-[2px] bg-transparent group-hover:bg-border transition-colors rounded-full" />
                               </button>
-                              {count === 0 && (
-                                <div className="mt-4 text-center text-xs font-semibold text-muted tracking-wide">
-                                  OR DROP TASKS HERE
-                                </div>
-                              )}
-                            </div>
-                            <DoneSection
-                              tasks={listTasks.filter((t) => t.status === "done")}
-                              renderTask={(t) => (
-                                <DraggableTask
-                                  key={t.id}
-                                  task={t}
-                                  fromListId={list.id}
-                                  onClick={() => {
-                                    setDrawerMode("edit");
-                                    setActiveTaskId(t.id);
-                                    setDrawerOpen(true);
-                                  }}
-                                  display={display}
-                                />
-                              )}
-                            />
-                          </DroppableListCard>
-                        );
-                      })}
-                      {/* Unlisted Tasks for this specific Group */}
-                      <DroppableListCard
-                        listId={`unlisted-group-${group.id}`}
-                        flat={true}
-                        className="w-[320px] shrink-0 p-4 flex flex-col"
-                        onTaskDrop={async (taskId, fromListId) => {
-                          const task = tasksById.get(taskId);
-                          if (!task) return;
-
-                          // 1. Delete placement from old list (if it was in one)
-                          if (fromListId) {
-                            await deleteTaskPlacementByTaskAndList({
-                              workspaceId,
-                              taskId,
-                              listId: fromListId,
-                            });
-                          }
-
-                          // 2. Assign specifically to this Group
-                          await updateTask({ id: taskId, location: "board", groupId: group.id });
-
-                          // 3. Invalidate
-                          await Promise.all([
-                            qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] }),
-                            qc.invalidateQueries({ queryKey: ["tasks", workspaceId] }),
-                          ]);
-                        }}
-                      >
-                        <div className="mb-4 flex items-center justify-between">
-                          <div className="font-semibold text-foreground">Unlisted Tasks</div>
-                        </div>
-                        <div className="flex-1 overflow-y-auto space-y-[2px] pb-2">
-                          {(unlistedTasksByGroupId.get(group.id) ?? []).length === 0 ? (
-                            <button
-                              onClick={() => {
-                                setCreateTargetListId(null);
-                                setCreateTargetUnlistedGroupId(group.id);
-                                setDrawerMode("create");
-                                setDrawerOpen(true);
-                                setLastUngroupedListId(null as any); // Might need to pass groupId here eventually
-                              }}
-                              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-muted-foreground hover:bg-accent-hover hover:text-foreground-muted"
-                            >
-                              <Plus size={16} />
-                              Add task
-                            </button>
-                          ) : null}
-                          {(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "active").map((t) => (
-                            <DraggableTask
-                              key={t.id}
-                              task={t}
-                              fromListId={null}
-                              onClick={() => {
-                                setDrawerMode("edit");
-                                setActiveTaskId(t.id);
-                                setDrawerOpen(true);
-                              }}
-                              display={display}
-                            />
-                          ))}
-                          {(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "active").length > 0 && (
-                            <button
-                              onClick={() => {
-                                // For unlisted group tasks we don't set a createTargetListId, just open drawer
-                                setDrawerMode("create");
-                                setDrawerOpen(true);
-                              }}
-                              className="w-full mt-2 rounded-lg border border-dashed border-border p-3 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:border-border-hover hover:text-foreground-muted transition-colors"
-                            >
-                              + Add task
-                            </button>
-                          )}
-                        </div>
-                        <DoneSection
-                          tasks={(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "done")}
-                          renderTask={(t) => (
-                            <DraggableTask
-                              key={t.id}
-                              task={t}
-                              fromListId={null}
-                              onClick={() => {
-                                setDrawerMode("edit");
-                                setActiveTaskId(t.id);
-                                setDrawerOpen(true);
-                              }}
-                              display={display}
-                            />
-                          )}
+                            )}
+                          </div>
+                          <DoneSection
+                            tasks={(unlistedTasksByGroupId.get(group.id) ?? []).filter((t) => t.status === "done")}
+                            renderTask={(t) => (
+                              <DraggableTask
+                                key={t.id}
+                                task={t}
+                                fromListId={null}
+                                onClick={() => {
+                                  setDrawerMode("edit");
+                                  setActiveTaskId(t.id);
+                                  setDrawerOpen(true);
+                                }}
+                                display={display}
+                              />
+                            )}
+                          />
+                        </DroppableListCard>
+                        <DroppableAddListButton
+                          groupId={group.id}
+                          workspaceId={workspaceId}
+                          onDrop={async (listId) => {
+                            await updateTaskList({ id: listId, groupId: group.id });
+                            await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+                          }}
+                          onAddClick={() => setListModal({ mode: "create", groupId: group.id })}
                         />
-                      </DroppableListCard>
-                      <DroppableAddListButton
-                        groupId={group.id}
-                        workspaceId={workspaceId}
-                        onDrop={async (listId) => {
-                          await updateTaskList({ id: listId, groupId: group.id });
-                          await qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
-                        }}
-                        onAddClick={() => setListModal({ mode: "create", groupId: group.id })}
-                      />
-                    </HorizontalScrollRow>
-                  </div>
-                )}
-              </section>
+                      </HorizontalScrollRow>
+                    </div>
+                  )}
+                </section>
+              </React.Fragment>
             );
           })}
 
@@ -2157,7 +2161,8 @@ export function BoardPage() {
                     const description = groupDescDraft.trim().length ? groupDescDraft.trim() : null;
                     try {
                       if (groupModal.mode === "create") {
-                        await createTaskGroup({ workspaceId, title: finalName, description });
+                        const sortOrder = groupModal.insertAfterSortOrder ?? groups.length;
+                        await createTaskGroup({ workspaceId, title: finalName, description, sortOrder });
                       } else {
                         await updateTaskGroup({ id: groupModal.id, title: finalName, description });
                       }
