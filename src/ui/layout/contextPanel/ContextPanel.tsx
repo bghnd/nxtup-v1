@@ -57,7 +57,7 @@ export function ContextPanel({
       style={{ width }}
       aria-label="Context panel"
     >
-      <div className="flex flex-col border-b border-border">
+      <div className="flex flex-col border-b border-border h-[63px]">
         <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1">
           <div className="flex items-center gap-1">
             <TabButton active={panel === "inbox"} onClick={() => onSelectPanel("inbox")}>

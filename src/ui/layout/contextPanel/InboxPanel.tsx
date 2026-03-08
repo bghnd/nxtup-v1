@@ -6,6 +6,8 @@ import type { Task } from "../../../domain/types";
 import type { DisplayPrefs } from "../../state/displayPrefs";
 import { cn } from "../../lib/cn";
 import { Badge } from "../../components/Badge";
+import { Input } from "../../components/Input";
+import { WorkflowPrompt } from "../../components/WorkflowPrompt";
 
 const DND_MIME = "application/x-nxtup-task";
 
@@ -27,7 +29,7 @@ export function InboxPanel({
 
   return (
     <div
-      className="p-4 min-h-full"
+      className="flex flex-col h-full overflow-hidden"
       onDragOver={(e) => {
         e.preventDefault();
         // Make ⌥-drag feel intentional (shows "copy" cursor in many browsers).
@@ -53,39 +55,62 @@ export function InboxPanel({
         onDropTaskToInbox(taskId, { keepAssignee: e.altKey });
       }}
     >
-      <div className="flex items-center gap-2">
-        <Inbox size={18} className="text-muted-foreground" />
-        <div className="text-sm font-semibold text-foreground">Inbox</div>
-        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 text-xs font-medium text-foreground-muted">
-          {count}
-        </span>
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="flex items-start gap-2">
+          <Inbox size={24} className="text-muted-foreground mr-1 mt-1" />
+          <div>
+            <div className="flex items-baseline gap-3">
+              <div className="text-2xl font-semibold text-foreground">Inbox</div>
+              <div className="text-xs text-muted font-normal ml-1">
+                {count} {count === 1 ? "task" : "tasks"}
+              </div>
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              Tasks needing your attention or triage...
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-4">
+          <div className="w-full">
+            <Input
+              className="rounded-full bg-transparent border border-blue-200 h-10 px-4 text-slate-400 placeholder:text-blue-300 font-medium transition-colors hover:bg-blue-50/50 focus-visible:bg-blue-100 focus-visible:border-transparent focus-visible:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-400 group-focus-within:bg-blue-100"
+              placeholder='Search Inbox...'
+              value=""
+              onChange={() => { }} // Placeholder for future feature #4 implementation
+            />
+          </div>
+
+          <div
+            className={cn(
+              "rounded-xl border border-border bg-card p-3 transition-colors",
+              isOver && "bg-blue-50/40 ring-2 ring-blue-500/20 ring-inset"
+            )}
+          >
+            {tasks.length ? (
+              <div className="space-y-[2px]">
+                {tasks.map((t) => (
+                  <InboxTaskCard key={t.id} task={t} display={display} onOpen={() => onOpenTask(t.id)} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                <div className="text-sm font-medium text-foreground">Inbox is empty</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  New tasks can start here before being assigned to a teammate.
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Tip: drop a task here to move it back to Inbox. Hold{" "}
+                  <kbd className="rounded border px-1">⌥</kbd> to keep the assignee.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div
-        className={cn(
-          "mt-4 rounded-xl border border-border bg-card p-3 transition-colors",
-          isOver && "bg-blue-50/40 ring-2 ring-blue-500/20 ring-inset"
-        )}
-      >
-        {tasks.length ? (
-          <div className="space-y-[2px]">
-            {tasks.map((t) => (
-              <InboxTaskCard key={t.id} task={t} display={display} onOpen={() => onOpenTask(t.id)} />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border p-8 text-center">
-            <div className="text-sm font-medium text-foreground">Inbox is empty</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              New tasks can start here before being assigned to a teammate.
-            </div>
-            <div className="mt-3 text-xs text-muted-foreground">
-              Tip: drop a task here to move it back to Inbox. Hold{" "}
-              <kbd className="rounded border px-1">⌥</kbd> to keep the assignee.
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Feature #4: AI Chat Component -> Workflow Prompt */}
+      <WorkflowPrompt />
     </div>
   );
 }

@@ -292,33 +292,9 @@ export function AppLayout() {
             </div>
           </div>
 
-          <div className={cn("flex items-center px-1 py-1", effectiveSidebarCollapsed ? "justify-center" : "justify-end")}>
-            {/* 
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={collapseButtonLabel}
-              title={collapseButtonLabel}
-              onClick={() => {
-                setCollapseMode("manual");
-                // If L2 panel is open, it forces L1 into rail-collapsed.
-                // Clicking the control should close L2 and expand L1 in one step.
-                if (panel) {
-                  setPanel(null);
-                  setSidebarCollapsed(false);
-                  return;
-                }
-                setSidebarCollapsed((v) => !v);
-              }}
-              className={cn(effectiveSidebarCollapsed ? "h-8 w-8 px-0" : "h-8")}
-            >
-              {effectiveSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-            </Button>
-            */}
-          </div>
-
           <div className="flex-1 overflow-y-auto pb-3">
-            <nav className="mt-1 space-y-1">
+            {/* Nav aligned to match the description byline in the Board/Inbox headers */}
+            <nav className="mt-[49px] space-y-1">
               <button
                 className={cn(
                   navItem,

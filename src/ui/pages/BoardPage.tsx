@@ -280,16 +280,21 @@ function DroppableGroupHeader({
       )}
     >
       <div className="min-w-0 flex-1">
-        <InlineEditableText
-          value={group.title}
-          ariaLabel={`Rename group ${group.title}`}
-          className="block w-full text-lg font-semibold text-foreground"
-          inputClassName="h-9 text-lg font-semibold"
-          onConfirm={async (next) => {
-            await updateTaskGroup({ id: group.id, title: next });
-            await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
-          }}
-        />
+        <div className="flex items-baseline gap-3">
+          <InlineEditableText
+            value={group.title}
+            ariaLabel={`Rename group ${group.title}`}
+            className="block text-lg font-semibold text-foreground"
+            inputClassName="h-9 text-lg font-semibold min-w-[200px]"
+            onConfirm={async (next) => {
+              await updateTaskGroup({ id: group.id, title: next });
+              await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+            }}
+          />
+          <div className="text-xs text-muted font-normal ml-1">
+            {groupListsLength} {groupListsLength === 1 ? "list" : "lists"} • {groupVisibleTaskCount} {groupVisibleTaskCount === 1 ? "task" : "tasks"}
+          </div>
+        </div>
         <InlineEditableText
           value={group.description ?? ""}
           placeholder="Add group description…"
@@ -306,10 +311,6 @@ function DroppableGroupHeader({
             await qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
           }}
         />
-        <div className="mt-1 text-xs text-muted">
-          {groupListsLength} {groupListsLength === 1 ? "list" : "lists"} • {groupVisibleTaskCount}{" "}
-          {groupVisibleTaskCount === 1 ? "task" : "tasks"}
-        </div>
       </div>
       <div className="flex items-center gap-2">
         <Button
@@ -503,6 +504,35 @@ export function BoardPage() {
     queryKey: ["workspace", workspaceId],
     queryFn: () => getWorkspace(workspaceId)
   });
+
+  // Enable Live Realtime updates for fast-paced collaboration
+  React.useEffect(() => {
+    if ((import.meta.env.VITE_USE_SUPABASE as string | undefined) !== "1") return;
+
+    // Fallback: Use dynamic import so it doesn't break if Mock adapter is loaded.
+    let channel: any;
+    import("../../data/supabaseClient").then(({ supabase }) => {
+      channel = supabase
+        .channel(`board_live_${workspaceId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `workspace_id=eq.${workspaceId}` }, () => {
+          qc.invalidateQueries({ queryKey: ["globalTasks"] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "task_groups", filter: `workspace_id=eq.${workspaceId}` }, () => {
+          qc.invalidateQueries({ queryKey: ["taskGroups", workspaceId] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "task_lists", filter: `workspace_id=eq.${workspaceId}` }, () => {
+          qc.invalidateQueries({ queryKey: ["taskLists", workspaceId] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "task_placements", filter: `workspace_id=eq.${workspaceId}` }, () => {
+          qc.invalidateQueries({ queryKey: ["taskPlacements", workspaceId] });
+        })
+        .subscribe();
+    }).catch(() => { });
+
+    return () => {
+      if (channel) channel.unsubscribe();
+    };
+  }, [workspaceId, qc]);
 
 
   const profilesQ = useQuery({
@@ -922,10 +952,10 @@ export function BoardPage() {
   }
 
   return (
-    <div>
+    <div className="pt-[15px]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-baseline gap-3">
             <InlineEditableText
               value={workspaceName}
               ariaLabel="Rename workspace"
@@ -937,15 +967,20 @@ export function BoardPage() {
                 await qc.invalidateQueries({ queryKey: ["workspace", workspaceId] });
               }}
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Workspace menu"
-              title="Workspace actions"
-              onClick={() => setWorkspaceModal({ mode: "delete", id: workspaceId, name: workspaceName })}
-            >
-              <MoreHorizontal size={18} />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Workspace menu"
+                title="Workspace actions"
+                onClick={() => setWorkspaceModal({ mode: "delete", id: workspaceId, name: workspaceName })}
+              >
+                <MoreHorizontal size={18} />
+              </Button>
+            </div>
+            <div className="text-xs text-muted font-normal ml-1">
+              {groups.length} {groups.length === 1 ? "group" : "groups"} • {lists.length} {lists.length === 1 ? "list" : "lists"} • {boardTasks.length} {boardTasks.length === 1 ? "task" : "tasks"}
+            </div>
           </div>
           <div className="mt-1">
             <InlineEditableText
@@ -1042,67 +1077,10 @@ export function BoardPage() {
         </div>
       </div>
 
-      <div className="mt-5 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm">
-            <Tag size={16} className="text-muted-foreground" />
-            Tags
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setDisplayOpen(true)}>
-            <Eye size={16} className="text-muted-foreground" />
-            View
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              <Filter size={14} className="text-muted-foreground" />
-              Priority
-            </div>
-            <div className="w-[160px]">
-              <Select
-                value={searchParams.get("priority") ?? ""}
-                onChange={(e) => {
-                  const next = new URLSearchParams(searchParams);
-                  const v = e.target.value;
-                  if (v) next.set("priority", v);
-                  else next.delete("priority");
-                  setSearchParams(next, { replace: true });
-                }}
-              >
-                <option value="">Any</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              <Calendar size={14} className="text-muted-foreground" />
-              Due
-            </div>
-            <div className="w-[170px]">
-              <Select
-                value={searchParams.get("due") ?? ""}
-                onChange={(e) => {
-                  const next = new URLSearchParams(searchParams);
-                  const v = e.target.value;
-                  if (v) next.set("due", v);
-                  else next.delete("due");
-                  setSearchParams(next, { replace: true });
-                }}
-              >
-                <option value="">Any</option>
-                <option value="overdue">Overdue</option>
-                <option value="next7">Next 7 days</option>
-              </Select>
-            </div>
-          </div>
-        </div>
-
+      <div className="mt-5 flex flex-col gap-4">
         <div className="w-full md:max-w-[520px]">
           <Input
+            className="rounded-full bg-transparent border border-blue-200 h-10 px-4 text-slate-400 placeholder:text-blue-300 font-medium transition-colors hover:bg-blue-50/50 focus-visible:bg-blue-100 focus-visible:border-transparent focus-visible:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-400"
             placeholder='Search or add… (Enter opens • ⌘↵ creates • "->" moves • "+->" multi-places)'
             value={quickAddText}
             onChange={(e) => {
@@ -1319,6 +1297,71 @@ export function BoardPage() {
               </div>
             </div>
           ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm">
+              <Tag size={16} className="text-muted-foreground" />
+              Tags
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setDisplayOpen(true)}>
+              <Eye size={16} className="text-muted-foreground" />
+              View
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <Filter size={14} className="text-muted-foreground" />
+                Priority
+              </div>
+              <div className="w-[160px]">
+                <Select
+                  value={searchParams.get("priority") ?? ""}
+                  onChange={(e) => {
+                    const next = new URLSearchParams(searchParams);
+                    const v = e.target.value;
+                    if (v) next.set("priority", v);
+                    else next.delete("priority");
+                    setSearchParams(next, { replace: true });
+                  }}
+                >
+                  <option value="">Any</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <Calendar size={14} className="text-muted-foreground" />
+                Due
+              </div>
+              <div className="w-[170px]">
+                <Select
+                  value={searchParams.get("due") ?? ""}
+                  onChange={(e) => {
+                    const next = new URLSearchParams(searchParams);
+                    const v = e.target.value;
+                    if (v) next.set("due", v);
+                    else next.delete("due");
+                    setSearchParams(next, { replace: true });
+                  }}
+                >
+                  <option value="">Any</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="next7">Next 7 days</option>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Save View Button */}
+          <Button variant="primary" size="sm">
+            Save view
+          </Button>
         </div>
       </div>
 

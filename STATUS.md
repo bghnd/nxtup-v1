@@ -1,15 +1,12 @@
-# Project Status
+# NXTUP Status
 
-## Recent Accomplishments
-- Refactored the data model and API layer to support Global Tasks, decoupling them from rigid workspace silos.
-- Created `listGlobalTasks` to fetch tasks unconstrained by local workspace IDs.
-- Implemented the `IndexPanel.tsx` in the Context Sidebar to display global tasks with functional sub-menu filters (A-Z, Recent, Unlisted).
-- Re-wired the `BoardPage.tsx` to utilize global task fetching, correctly rendering locally placed tasks and gracefully filtering out unlisted foreign tasks.
-- Overhauled Drag and Drop (React-DnD): 
-  - Converted native HTML5 `InboxTaskCard` and `IndexTaskCard` to `react-dnd` `useDrag` payloads matching the board components.
-  - Fixed a critical backend `UUID` parsing bug to allow tasks dragged from synthetic lists (like `"l_inbox"`) to successfully save their new location and placement in the database.
-- Unified task typography (`font-light`, `text-foreground-muted`) across all task components (inbox, index, boards).
+## Latest Accomplishments (UI Alignment, Search, Feature #4)
+- **Feature #4 (Workflow Prompt):** Extracted the AI Chat component into a dedicated `<WorkflowPrompt />`. Anchored it to the bottom of the Inbox panel using a flex layout, implemented auto-expanding height, and styled it with a blue focus container outline.
+- **Search Interactions:** Implemented interactive active/dormant states for the new pill-shaped Search bars across the Board and Inbox contexts.
+- **Strict Alignments:** Enforced exact 16px bottom margins beneath search components to keep layout baselines flat across columns.
+- **Sidebar Typography:** Nav items ("My Inbox") were adjusted with margin nudges to hit pixel-perfect horizontal alignments with Workspace/Inbox description text lines (Y=133px).
+- **Simulation Engine Planning:** Discussed and documented a headless "State Simulation Engine" blueprint into `simulation_engine_spec.md` to be tackled next for robust UI/AI stress testing.
 
 ## Next Steps
-- Establish robust automated testing (Vitest) setup and coverage for the global data layer once the macOS `EPERM` `.npm` cache restrictions are resolved.
-- Continue tracking and resolving any remaining quirks with global task visibility and interactions.
+- Implement the Node-based State Simulation Engine (from `simulation_engine_spec.md`) to dynamically seed workspaces mock data and simulate time progression for tasks and meetings.
+- Finalize the functional parsing/dispatch logic for slash commands and tags within the new Workflow Prompt.

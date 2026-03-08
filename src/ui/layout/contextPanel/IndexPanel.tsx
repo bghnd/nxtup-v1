@@ -37,11 +37,13 @@ export function IndexPanel({
     return (
         <div className="p-4 min-h-full">
             <div className="flex items-center gap-2">
-                <ListTodo size={18} className="text-muted-foreground" />
-                <div className="text-sm font-semibold text-foreground">Global Index</div>
-                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-2 text-xs font-medium text-foreground-muted">
-                    {visibleTasks.length}
-                </span>
+                <ListTodo size={24} className="text-muted-foreground mr-1" />
+                <div className="flex items-baseline gap-3">
+                    <div className="text-2xl font-semibold text-foreground">Global Index</div>
+                    <div className="text-xs text-muted font-normal ml-1">
+                        {visibleTasks.length} {visibleTasks.length === 1 ? "task" : "tasks"}
+                    </div>
+                </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-border bg-card p-3">

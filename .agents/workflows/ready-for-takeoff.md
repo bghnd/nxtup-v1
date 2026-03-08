@@ -8,4 +8,5 @@ When I say "ready for takeoff", you should execute these steps sequentially to r
 // turbo-all
 3. Run `git status` and `git log -1` to verify we are on the correct branch and review the last commit.
 4. Run `npm run dev` in the background to spin up the local development server so we can begin working immediately.
-5. Announce that we are ready for takeoff, print a very brief summary of where we left off based on `STATUS.md`, and ask me what we are tackling first today.
+5. Use `browser_subagent` to navigate to the local development server URL to ensure it is visible and functioning.
+6. Announce that we are ready for takeoff, print a very brief summary of where we left off based on `STATUS.md`, and ask me what we are tackling first today.
