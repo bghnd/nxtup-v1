@@ -1,4 +1,4 @@
-# NXTUP — Living Product Requirements Document
+# Living PRD
 
 > This document is updated at the end of every working session ("landing the plane"). It is the canonical source of product vision, settled decisions, and in-progress thinking. It is not a spec — it evolves.
 
@@ -129,6 +129,13 @@ New workspaces will not start empty. They will bootstrap with at least two defau
 - **DnD:** react-dnd
 - **Branch:** `experiment/ui-and-search`
 
+**Real-time Architecture (pre-enterprise launch):**
+- Current MVP uses debounced re-fetches via React Query — acceptable for early users
+- Before enterprise launch: rewrite `supabaseAdapter` listeners to use **Delta Updates** — WebSocket payloads patch the local cache directly, zero extra database reads
+- For very large lists: pair with **Server-Side Counter Tables** via Postgres triggers so clients receive a single integer update instead of re-fetching full task records
+
+→ See [Scaling Analysis](scaling analysis.md) for full research and tradeoff breakdown
+
 ---
 
 ## 10. Open Questions
@@ -158,4 +165,13 @@ One consistent visual language across all add/create affordances on the board:
 
 ---
 
-*Last updated: 2026-03-08 by session with JayPro*
+## 12. Reference Documents
+
+| Document | Location | Purpose |
+|---|---|---|
+| Scaling Analysis | [scaling analysis.md](scaling analysis.md) | Research note on real-time architecture tradeoffs at enterprise scale. Supports decisions in Section 9. |
+| State Simulation Engine | [simulation_engine_spec.md](simulation_engine_spec.md) | Blueprint for a headless data seeder + time-clock simulator for realistic UI/performance/agent testing. Planned for next sprint. |
+
+---
+
+*Last updated: 2026-03-09 by session with JayPro*
